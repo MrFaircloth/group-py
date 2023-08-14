@@ -1,6 +1,7 @@
 from typing import List
 from datetime import datetime
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 
 class Message:
@@ -23,7 +24,7 @@ class Message:
         self.system: bool = raw_message_data.get('system')
         self.text: str = raw_message_data.get('text')
         self.user_id: str = raw_message_data.get('user_id')
-        self._raw = raw_message_data
+        self._raw: dict = raw_message_data
 
     def __repr__(self) -> str:
         return f'<Message id=\'{self.id}\', name=\'{self.name}\''
@@ -33,29 +34,53 @@ class Message:
 
 
 class MessageHandler(ABC):
-    ''' Abstract message handler class. '''
+    '''Abstract message handler class.'''
 
+    @property
+    @classmethod
+    def name(cls):
+        '''Handler name.'''
+        return cls.__name__
+
+    @staticmethod
     @abstractmethod
-    def can_handle(self, message: Message) -> bool:
+    def can_handle(message: Message) -> bool:
         '''
         Checks message contents for handler criteria.
         Example: `return message.text.lower().strip() == '!ready'`
         '''
 
+    @staticmethod
     @abstractmethod
-    def execute(self, message: Message) -> None:
+    def execute(message: Message) -> None:
         '''Executes action based on given input.'''
 
 
+@dataclass
+class Route:
+    name: str
+    handler: MessageHandler
+    executions: int = 0
+
+
 class MessageRouter:
-    ''' Routes messages to appropriate handlers '''
+    '''Routes messages to appropriate handlers.'''
+
+    _routes: List[Route]
 
     def __init__(self, handlers: List[MessageHandler]) -> None:
-        self._handlers = handlers
+        self._routes = [Route(handler.__name__, handler) for handler in handlers]
+
+    @property
+    def get_routes(self) -> List[Route]:
+        return self._routes
+
+    def get_route_by_name(self, name: str):
+        return next((route for route in self._routes if route.name == name), None)
 
     def route(self, message: Message) -> None:
-        '''Routes message to all applicable'''
-        for handler in self._handlers:
-            if handler.can_handle(message):
-                handler.execute(message)
-
+        '''Routes message to all applicable handlers.'''
+        for route in self._routes:
+            if route.handler.can_handle(message):
+                route.handler.execute(message)
+                route.executions += 1
