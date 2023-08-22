@@ -1,5 +1,6 @@
 from api import groupme_api_post
 
+
 def create(
     name: str,
     group_id: str,
@@ -20,13 +21,18 @@ def create(
     groupme_api_post('/bots', params=params)
     return params
 
+
 # TODO
 def destroy():
+    # https://dev.groupme.com/docs/v3#bots_destroy
     pass
+
 
 def index():
+    # https://dev.groupme.com/docs/v3#bots_index
     pass
+
 
 def post_message():
+    # https://dev.groupme.com/docs/v3#bots_post
     pass
-

@@ -7,6 +7,7 @@ TOKEN = os.getenv('GROUPME_API_TOKEN')
 
 # TODO: One funtion to rule them all.
 
+
 def groupme_api_get(path: str, params: dict = {}):
     url = f'https://api.groupme.com/v3{path}'
     params['token'] = TOKEN

@@ -69,7 +69,9 @@ class MessageRouter:
     _routes: Dict[str, Route]
 
     def __init__(self, handlers: List[MessageHandler]) -> None:
-        self._routes = { handler.__name__: Route(handler.__name__, handler) for handler in handlers }
+        self._routes = {
+            handler.__name__: Route(handler.__name__, handler) for handler in handlers
+        }
 
     @property
     def get_routes(self) -> List[Route]:
