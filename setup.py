@@ -5,5 +5,8 @@ setuptools.setup(
     version='0.1.0',
     author='mrfaircloth',
     description='GroupMe API wrapper module.',
-    packages=['group-py'],
+    packages=['group_py'],
+    install_requires=[
+        'requests',  # List your dependencies here
+    ],
 )

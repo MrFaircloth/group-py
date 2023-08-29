@@ -1,7 +1,9 @@
 import logging
 
-from api import groupme_api, GroupmeBotError
+from .api import groupme_api, GroupmeBotError
 
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+logger = logging.getLogger('GroupMeBot')
 
 class GroupMeBot:
     def __init__(
@@ -15,6 +17,7 @@ class GroupMeBot:
         active: bool = True,
     ):
         if bot_id:
+            logger.info(f'Checking for existing bot id "{bot_id}"')
             self.index(bot_id)
         else:
             if not all((name, group_id)):
@@ -28,7 +31,7 @@ class GroupMeBot:
             self.dm_notification = dm_notification
             self.active = active
 
-    def create(self):
+    def create(self) -> dict:
         '''Creates bot in configured GroupMe group.'''
         # https://dev.groupme.com/docs/v3#bots_create
 
@@ -42,19 +45,21 @@ class GroupMeBot:
                 'active': self.active,
             }
         }
-
+        logger.info(f'Creating bot {self.name}.')
         bot_details = groupme_api('POST', '/bots', data=data).json()['response']['bot']
         self.bot_id = bot_details['bot_id']
+        logger.info(f'Successfully created bot. ID "{self.bot_id}"')
         return bot_details
 
     def index(self, bot_id: str) -> dict:
         '''Searches for matching bot ID and updates object details.'''
+        logger.info('Fetching existing bots...')
         index_data = groupme_api('GET', '/bots').json()['response']
         filtered_data: list = list(
             filter(lambda person: person['bot_id'] == bot_id, index_data)
         )
-
         if len(filtered_data):
+            logger.info(f'Found bot matching ID "{self.bot_id}"')
             bot_data = filtered_data[0]  # should be only one element
             self.bot_id = bot_data['bot_id']
             self.name = bot_data['name']
@@ -68,9 +73,12 @@ class GroupMeBot:
 
     def destroy(self):
         # https://dev.groupme.com/docs/v3#bots_destroy
-        groupme_api('POST', '/bots/destroy', {'bot_id': self.bot_id})
+        if hasattr(self, 'bot_id'):
+            logger.info(f'Destroying bot ID "{self.bot_id}"')
+            groupme_api('POST', '/bots/destroy', {'bot_id': self.bot_id})
 
     def post_message(self, text: str, picture_url: str = None):
         # https://dev.groupme.com/docs/v3#bots_post
+        logger.info(f'Posting message "{text}"')
         message_data = {'bot_id': self.bot_id, 'text': text, 'picture_url': picture_url}
         groupme_api('POST', '/bots/post', data=message_data)

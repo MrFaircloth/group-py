@@ -1,4 +1,4 @@
-from api import groupme_api_get
+from .api import groupme_api
 
 
 def groupme_groups_index(page: int = 1, per_page: int = 10):
@@ -7,5 +7,5 @@ def groupme_groups_index(page: int = 1, per_page: int = 10):
         'page': page,
         'per_page': per_page,
     }
-    response = groupme_api_get(path='/groups', params=params)
+    response = groupme_api(path='/groups', params=params)
     return response
