@@ -3,37 +3,28 @@ import requests
 
 from helpers import param_filter
 
-TOKEN = os.getenv('GROUPME_API_TOKEN')
+API_TOKEN = os.getenv('GROUPME_API_TOKEN')
 
-# TODO: One funtion to rule them all.
+class GroupmeBotError(Exception):
+    ''' Custom bot exception. '''
 
 
-def groupme_api_get(path: str, params: dict = {}):
+def groupme_api(method: str, path: str, params: dict = {}, data: dict = {}) -> dict:
+    ''' Handles GroupMe api requests. '''
     url = f'https://api.groupme.com/v3{path}'
-    params['token'] = TOKEN
+    params['token'] = API_TOKEN
 
     params = param_filter(params)
 
-    response = requests.get(url, params=params)
-
+    if method.upper() == 'GET':
+        response = requests.get(url, params=params)
+    elif method.upper() == 'POST':
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(url, json=data, headers=headers)
+    else:
+        raise ValueError("Invalid HTTP method. Use 'GET' or 'POST'.")
+    
     if response.status_code == 200:
         return response.json()
-    else:
-        print(f"Error: {response.status_code}")
-        return False
-
-
-def groupme_api_post(path: str, params: dict = {}):
-    url = f'https://api.groupme.com/v3{path}'
-    headers = {'Content-Type': 'application/json'}
-    params['token'] = TOKEN
-
-    data = param_filter(params)
-
-    response = requests.post(url, json=data, headers=headers)
-
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Error: {response.status_code}")
-        return False
+    
+    raise(GroupmeBotError(f"API Error: {response.status_code}"))
