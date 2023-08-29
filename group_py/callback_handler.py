@@ -80,9 +80,10 @@ class MessageRouter:
     def get_route_by_name(self, name: str):
         return self._routes.get(name)
 
-    def route(self, message: Message) -> None:
+    def route(self, message: Message) -> dict:
         '''Routes message to all applicable handlers.'''
         for route in self._routes.values():
             if route.handler.can_handle(message):
-                route.handler.execute(message)
+                result = route.handler.execute(message)
                 route.executions += 1
+                return result
