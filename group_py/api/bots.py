@@ -34,12 +34,12 @@ class GroupMeBot:
 
         data = {
             'bot': {
-            'name': self.name,
-            'group_id': self.group_id,
-            'avatar_url': self.avatar_url,
-            'callback_url': self.callback_url,
-            'dm_notification': self.dm_notification,
-            'active': self.active,
+                'name': self.name,
+                'group_id': self.group_id,
+                'avatar_url': self.avatar_url,
+                'callback_url': self.callback_url,
+                'dm_notification': self.dm_notification,
+                'active': self.active,
             }
         }
 
@@ -74,4 +74,3 @@ class GroupMeBot:
         # https://dev.groupme.com/docs/v3#bots_post
         message_data = {'bot_id': self.bot_id, 'text': text, 'picture_url': picture_url}
         groupme_api('POST', '/bots/post', data=message_data)
-
