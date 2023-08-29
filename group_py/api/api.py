@@ -1,7 +1,7 @@
 import os
 import requests
 
-from helpers import param_filter
+from util import param_filter
 
 API_TOKEN = os.getenv('GROUPME_API_TOKEN')
 
@@ -20,9 +20,11 @@ def groupme_api(method: str, path: str, params: dict = {}, data: dict = {}) -> d
 
     if method.upper() == 'GET':
         response = requests.get(url, params=params)
+
     elif method.upper() == 'POST':
         headers = {'Content-Type': 'application/json'}
         response = requests.post(url, params=params, json=data, headers=headers)
+
     else:
         raise ValueError("Invalid HTTP method. Use 'GET' or 'POST'.")
 
