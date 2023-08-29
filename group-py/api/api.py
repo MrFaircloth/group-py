@@ -16,7 +16,6 @@ def groupme_api(method: str, path: str, params: dict = {}, data: dict = {}) -> d
     params['token'] = API_TOKEN
 
     params = param_filter(params)
-    # data = param_filter(data)
 
     if method.upper() == 'GET':
         response = requests.get(url, params=params)
