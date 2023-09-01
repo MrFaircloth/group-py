@@ -2,8 +2,11 @@ import logging
 
 from .api import groupme_api, GroupmeBotError
 
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+logging.basicConfig(
+    format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger('GroupMeBot')
+
 
 class GroupMeBot:
     def __init__(

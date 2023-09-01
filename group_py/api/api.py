@@ -8,11 +8,12 @@ API_TOKEN = os.getenv('GROUPME_API_TOKEN')
 
 Method: TypeAlias = Literal['GET', 'POST']
 
+
 class GroupmeBotError(Exception):
     '''Custom bot exception.'''
 
 
-def groupme_api(method: Method, path: str, params: dict = {}, data: dict = {}) -> dict:
+def groupme_api(method: Method, path: str, params: dict = {}, data: dict = {}) -> requests.Response:
     '''Handles GroupMe api requests.'''
     url = f'https://api.groupme.com/v3{path}'
     params['token'] = API_TOKEN
