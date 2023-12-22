@@ -1,4 +1,5 @@
 import logging
+from threading import Lock
 
 from .api import groupme_api, GroupmeBotError
 
@@ -8,7 +9,23 @@ logging.basicConfig(
 logger = logging.getLogger('GroupMeBot')
 
 
-class GroupMeBot:
+
+class SingletonMeta(type):
+    """
+    A thread-safe implementation of Singleton.
+    """
+    _instances = {}
+    _lock = Lock()
+
+    def __call__(cls, *args, **kwargs):
+        with cls._lock:
+            if cls not in cls._instances:
+                instance = super().__call__(*args, **kwargs)
+                cls._instances[cls] = instance
+            return cls._instances[cls]
+
+
+class GroupMeBot(SingletonMeta):
     def __init__(
         self,
         bot_id: str = None,
@@ -62,7 +79,7 @@ class GroupMeBot:
             filter(lambda person: person['bot_id'] == bot_id, index_data)
         )
         if len(filtered_data):
-            logger.info(f'Found bot matching ID "{self.bot_id}"')
+            logger.info(f'Found bot matching ID "{bot_id}"')
             bot_data = filtered_data[0]  # should be only one element
             self.bot_id = bot_data['bot_id']
             self.name = bot_data['name']
