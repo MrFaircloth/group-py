@@ -37,6 +37,7 @@ class GroupMeBot(metaclass=SingletonMeta):
         active: bool = True,
     ):
         if bot_id:
+            self.bot_id = bot_id
             logger.info(f'Checking for existing bot id "{bot_id}"')
             self.index(bot_id)
         else:
