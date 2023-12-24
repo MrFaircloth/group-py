@@ -25,7 +25,7 @@ class SingletonMeta(type):
             return cls._instances[cls]
 
 
-class GroupMeBot(SingletonMeta):
+class GroupMeBot(metaclass=SingletonMeta):
     def __init__(
         self,
         bot_id: str = None,
