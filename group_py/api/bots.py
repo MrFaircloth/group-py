@@ -31,9 +31,9 @@ class GroupMeBot(metaclass=SingletonMeta):
         bot_id: str = None,
         name: str = None,
         group_id: str = None,
-        avatar_url: str = None,
-        callback_url: str = None,
-        dm_notification: bool = None,
+        avatar_url: str = '',
+        callback_url: str = '',
+        dm_notification: bool = False,
         active: bool = True,
     ):
         if bot_id:
