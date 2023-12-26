@@ -26,15 +26,6 @@ class MessageRouter:
     def get_routes(self) -> List[Route]:
         return self._routes
 
-    def help(self):
-        '''Returns instructions on all command usage.
-        TODO: Will make another class 'CommandHandler' and only those
-        will be used.
-        '''
-        for key, route in self._routes.items():
-            print(f'{key}')
-            print(route.handler.help())
-
     def get_route_by_name(self, name: str):
         return self._routes.get(name)
 
