@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock
 
-from group_py.callback_handler import MessageRouter, MessageHandler, Message
+from group_py.router import MessageRouter, MessageHandler, Message
 
 
 class ReadyHandler(MessageHandler):
