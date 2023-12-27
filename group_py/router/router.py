@@ -1,8 +1,9 @@
 from typing import List, Dict
 from dataclasses import dataclass
+from threading import Lock
 
 from .groupme_message import Message
-from .handlers import MessageHandler
+from .handlers import MessageHandler, CommandHandler
 
 
 @dataclass
@@ -11,8 +12,24 @@ class Route:
     handler: MessageHandler
     executions: int = 0
 
+# TODO: Unify with bots Singleton
+class SingletonMeta(type):
+    """
+    A thread-safe implementation of Singleton.
+    """
 
-class MessageRouter:
+    _instances = {}
+    _lock = Lock()
+
+    def __call__(cls, *args, **kwargs):
+        with cls._lock:
+            if cls not in cls._instances:
+                instance = super().__call__(*args, **kwargs)
+                cls._instances[cls] = instance
+            return cls._instances[cls]
+
+
+class MessageRouter(metaclass=SingletonMeta):
     '''Routes messages to appropriate handlers.'''
 
     _routes: Dict[str, Route]
