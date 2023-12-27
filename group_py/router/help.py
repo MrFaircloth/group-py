@@ -26,7 +26,7 @@ class HelpHandler(CommandHandler):
             if issubclass(route.handler, CommandHandler):
                 commands.append(
                     f'{route.handler.command()}\n'
-                    f'{route.handler.help()}'
+                    f'{route.handler.help()}\n'
                 )
 
         bot.post_message('\n'.join(commands))
