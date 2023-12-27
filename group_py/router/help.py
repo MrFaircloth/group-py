@@ -1,6 +1,6 @@
 from group_py import GroupMeBot, Message, CommandHandler, MessageRouter
 
-class helpHandler(CommandHandler):
+class HelpHandler(CommandHandler):
 
     def command():
         return '!help'
