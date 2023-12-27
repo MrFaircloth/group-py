@@ -1,4 +1,7 @@
-from group_py import GroupMeBot, Message, CommandHandler, MessageRouter
+from .groupme_message import Message
+from .handlers import CommandHandler
+from .router import MessageRouter
+from ..api.bots import GroupMeBot
 
 class HelpHandler(CommandHandler):
 
@@ -7,7 +10,7 @@ class HelpHandler(CommandHandler):
 
     def help():
         return (
-            "Collects all commands and prints functionality."
+            "\tCollects all commands and prints functionality."
         )
 
     def can_handle(message: Message):
@@ -22,7 +25,7 @@ class HelpHandler(CommandHandler):
         for route in router.get_routes.values():
             if issubclass(route.handler, CommandHandler):
                 commands.append(
-                    f'{route.handler.command}\n'
+                    f'{route.handler.command()}\n'
                     f'{route.handler.help()}'
                 )
 

@@ -21,7 +21,7 @@ class MessageHandler(ABC):
 
 
 class CommandHandler(MessageHandler):
-    @property
+
     @staticmethod
     def command() -> str:
         '''
