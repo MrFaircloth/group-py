@@ -9,11 +9,11 @@ logging.basicConfig(
 logger = logging.getLogger('GroupMeBot')
 
 
-
 class SingletonMeta(type):
     """
     A thread-safe implementation of Singleton.
     """
+
     _instances = {}
     _lock = Lock()
 
