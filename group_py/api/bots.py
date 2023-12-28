@@ -9,6 +9,13 @@ logging.basicConfig(
 logger = logging.getLogger('GroupMeBot')
 
 
+def index():
+    #  https://dev.groupme.com/docs/v3#bots_index
+    response = groupme_api('GET', path=f'/bots')
+    if response.ok:
+        return response.json()['response']
+
+
 class SingletonMeta(type):
     """
     A thread-safe implementation of Singleton.
@@ -35,6 +42,7 @@ class GroupMeBot(metaclass=SingletonMeta):
         callback_url: str = '',
         dm_notification: bool = False,
         active: bool = True,
+        search_for_existing: bool = True,
     ):
         if bot_id:
             self.bot_id = bot_id
@@ -45,6 +53,11 @@ class GroupMeBot(metaclass=SingletonMeta):
                 raise TypeError(
                     'Parameters "name" and "group_id" are required if "bot_id" is not defined.'
                 )
+            if search_for_existing:
+                try:
+                    self.index(bot_name=name, group_id=group_id)
+                except GroupmeBotError:
+                    pass
             self.name = name
             self.group_id = group_id
             self.avatar_url = avatar_url
@@ -52,10 +65,12 @@ class GroupMeBot(metaclass=SingletonMeta):
             self.dm_notification = dm_notification
             self.active = active
 
-    def create(self) -> dict:
+    def create(self, force: bool = False) -> dict:
         '''Creates bot in configured GroupMe group.'''
         # https://dev.groupme.com/docs/v3#bots_create
-
+        if self.bot_id:
+            logger.info('Bot already assigned.')
+            return
         data = {
             'bot': {
                 'name': self.name,
@@ -72,25 +87,32 @@ class GroupMeBot(metaclass=SingletonMeta):
         logger.info(f'Successfully created bot. ID "{self.bot_id}"')
         return bot_details
 
-    def index(self, bot_id: str) -> dict:
-        '''Searches for matching bot ID and updates object details.'''
+    def update_bot(self, bot_data):
+        self.bot_id = bot_data['bot_id']
+        self.name = bot_data['name']
+        self.group_id = bot_data['group_id']
+        self.avatar_url = bot_data['avatar_url']
+        self.callback_url = bot_data['callback_url']
+        self.dm_notification = bot_data['dm_notification']
+        self.active = bot_data['active']
+        return bot_data
+
+    def index(self, bot_id: str = None, bot_name: str = None, group_id: str = None) -> dict:
+        '''Searches for matching bot ID / name & group and updates object details.'''
         logger.info('Fetching existing bots...')
-        index_data = groupme_api('GET', '/bots').json()['response']
+        index_data = index()
         filtered_data: list = list(
-            filter(lambda person: person['bot_id'] == bot_id, index_data)
+            filter(
+                lambda bot: 
+                bot['bot_id'] == bot_id or
+                bot['name'] == bot_name and
+                bot['group_id'] == group_id, 
+                index_data)
         )
         if len(filtered_data):
             logger.info(f'Found bot matching ID "{bot_id}"')
-            bot_data = filtered_data[0]  # should be only one element
-            self.bot_id = bot_data['bot_id']
-            self.name = bot_data['name']
-            self.group_id = bot_data['group_id']
-            self.avatar_url = bot_data['avatar_url']
-            self.callback_url = bot_data['callback_url']
-            self.dm_notification = bot_data['dm_notification']
-            self.active = bot_data['active']
-            return bot_data
-        raise GroupmeBotError(f'Unable to find GroupMe bot with ID "{bot_id}"')
+            return self.update_bot(filtered_data[0])
+        raise GroupmeBotError(f'Unable to find GroupMe bot.')
 
     def destroy(self):
         # https://dev.groupme.com/docs/v3#bots_destroy
