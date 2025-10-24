@@ -17,9 +17,7 @@ def index():
 
 
 class SingletonMeta(type):
-    """
-    A thread-safe implementation of Singleton.
-    """
+    '''A thread-safe implementation of Singleton.'''
 
     _instances = {}
     _lock = Lock()
@@ -58,6 +56,7 @@ class GroupMeBot(metaclass=SingletonMeta):
                     self.index(bot_name=name, group_id=group_id)
                 except GroupmeBotError:
                     pass
+            self.bot_id = None
             self.name = name
             self.group_id = group_id
             self.avatar_url = avatar_url

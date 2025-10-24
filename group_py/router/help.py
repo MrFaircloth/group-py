@@ -1,6 +1,5 @@
 from .groupme_message import Message
 from .handlers import CommandHandler
-from .router import MessageRouter
 from ..api.bots import GroupMeBot
 
 class HelpHandler(CommandHandler):
@@ -15,9 +14,10 @@ class HelpHandler(CommandHandler):
 
     def can_handle(message: Message):
         return message.text.lower().strip().startswith('!help')
-    
+
     def execute(message: Message):
         # Bot and Router MUST be instatiated
+        from .router import MessageRouter
         bot = GroupMeBot()
         router = MessageRouter()
 

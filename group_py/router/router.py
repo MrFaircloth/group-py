@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from threading import Lock
 
 from .groupme_message import Message
-from .handlers import MessageHandler, CommandHandler
+from .handlers import MessageHandler
+from .help import HelpHandler
 
 
 @dataclass
@@ -12,7 +13,7 @@ class Route:
     handler: MessageHandler
     executions: int = 0
 
-# TODO: Unify with bots Singleton
+# TODO: Unify with bots Singleton class
 class SingletonMeta(type):
     """
     A thread-safe implementation of Singleton.
@@ -35,6 +36,7 @@ class MessageRouter(metaclass=SingletonMeta):
     _routes: Dict[str, Route]
 
     def __init__(self, handlers: List[MessageHandler]) -> None:
+        handlers.append(HelpHandler)
         self._routes = {
             handler.__name__: Route(handler.__name__, handler) for handler in handlers
         }

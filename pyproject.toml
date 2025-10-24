@@ -1,0 +1,7 @@
+# python -m pytest \
+# --run-integration tests/test_bot_integration.py
+[tool.pytest.ini_options]
+markers = [
+    "integration: mark test as integration test requiring live API",
+    "slow: mark test as slow to run"
+]

@@ -18,7 +18,7 @@ The access token can be set using the `GROUPME_API_TOKEN` environment variable.
 The callback handler module can be used to route and handle messages based on their contents.
 For example, in the context of a flask app:
 
-```
+``` py
 from group_py.callback_handler import MessageHandler, MessageRouter
 
 class ReadyHandler(MessageHandler):
@@ -29,8 +29,10 @@ class ReadyHandler(MessageHandler):
         return message.text.lower().strip() == '!ready'
 
     def execute(message: Message) -> None:
-        '''Executes action based on given input.'''
-        ... do some action ...
+        '''
+        Executes action based on given input.
+        '''
+        # ... do some action ...
         return {'ready': True }
 
 router = MessageRouter([ReadyHandler])
@@ -49,7 +51,7 @@ We can create a ReadyHandler object which will then be routed to by the router i
 ### Bots
 Bots can be managed using the bot module.
 
-```
+``` py
 from group_py.api.bots import GroupMeBot
 
 bot = GroupMeBot(
@@ -79,11 +81,9 @@ bot.post_message('this is a message') # posts message to group
 bot.destroy() # destroys bot and removes from group
 
 ```
-
  You can also create a bot object using an existing bot by providing the ID. On init, the if `bot_id` is provided, the GroupMe API will check for that bot and automatically assign the rest of the values.
-
- ```
- from group_py.api.bots import GroupMeBot
+``` py
+from group_py.api.bots import GroupMeBot
 
 bot = GroupMeBot(bot_id='1234567890')
 bot.post_message( ... )
