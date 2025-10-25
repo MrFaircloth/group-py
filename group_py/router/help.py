@@ -1,32 +1,34 @@
+from typing import TYPE_CHECKING
+
 from .groupme_message import Message
 from .handlers import CommandHandler
-from ..api.bots import GroupMeBot
+
+if TYPE_CHECKING:
+    from .context import HandlerContext
+
 
 class HelpHandler(CommandHandler):
+    command_str = '!help'
 
-    def command():
-        return '!help'
+    @classmethod
+    def command(cls):
+        return cls.command_str
 
+    @staticmethod
     def help():
-        return (
-            "\tCollects all commands and prints functionality."
-        )
+        return "Collects all commands and prints functionality."
 
-    def can_handle(message: Message):
-        return message.text.lower().strip().startswith('!help')
+    @classmethod
+    def can_handle(cls, message: Message):
+        return message.text.lower().strip().startswith(cls.command_str)
 
-    def execute(message: Message):
-        # Bot and Router MUST be instatiated
-        from .router import MessageRouter
-        bot = GroupMeBot()
-        router = MessageRouter()
-
-        commands = []
-        for route in router.get_routes.values():
+    def execute(context: 'HandlerContext'):
+        commands = ['-- Commands -- ']
+        for route in context.router.get_routes.values():
             if issubclass(route.handler, CommandHandler):
                 commands.append(
-                    f'{route.handler.command()}\n'
-                    f'{route.handler.help()}\n'
+                    f'> {route.handler.command()}: '
+                    f'{route.handler.help()}'
                 )
 
-        bot.post_message('\n'.join(commands))
+        context.bot.post_message('\n'.join(commands))

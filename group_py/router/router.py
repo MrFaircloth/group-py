@@ -5,6 +5,8 @@ from threading import Lock
 from .groupme_message import Message
 from .handlers import MessageHandler
 from .help import HelpHandler
+from .context import HandlerContext
+from group_py.api.bots import GroupMeBot
 
 
 @dataclass
@@ -35,11 +37,12 @@ class MessageRouter(metaclass=SingletonMeta):
 
     _routes: Dict[str, Route]
 
-    def __init__(self, handlers: List[MessageHandler]) -> None:
+    def __init__(self, handlers: List[MessageHandler], bot: GroupMeBot = None) -> None:
         handlers.append(HelpHandler)
         self._routes = {
             handler.__name__: Route(handler.__name__, handler) for handler in handlers
         }
+        self._bot = bot
 
     @property
     def get_routes(self) -> List[Route]:
@@ -52,6 +55,7 @@ class MessageRouter(metaclass=SingletonMeta):
         '''Routes message to all applicable handlers.'''
         for route in self._routes.values():
             if route.handler.can_handle(message):
-                result = route.handler.execute(message)
+                context = HandlerContext(bot=self._bot, router=self, message=message)
+                result = route.handler.execute(context)
                 route.executions += 1
                 return result
