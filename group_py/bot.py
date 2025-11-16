@@ -42,7 +42,7 @@ class GroupMeBotManager:
         self,
         api_key: str = None,
         group_id: str = None,
-        callback_url: str = None,
+        callback_url: Optional[str] = None,
         bot_name: str = "System",
         bot_id: str = None,
         avatar_url: str = None,
@@ -55,7 +55,7 @@ class GroupMeBotManager:
         Args:
             api_key: GroupMe API key (or set GROUPME_API_KEY env var)
             group_id: Group ID (or set GROUPME_GROUP_ID env var)
-            callback_url: Webhook callback URL for receiving messages
+            callback_url: Webhook callback URL (optional, only needed for receiving messages/commands)
             bot_name: Name for the primary bot (default: "System")
             bot_id: Existing bot ID for primary bot (optional, will auto-create if not provided)
             avatar_url: Avatar URL for the primary bot

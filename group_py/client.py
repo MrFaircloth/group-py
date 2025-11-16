@@ -27,7 +27,7 @@ class GroupMeClient:
         self,
         name: str,
         group_id: str,
-        callback_url: str,
+        callback_url: Optional[str] = None,
         avatar_url: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
@@ -36,7 +36,7 @@ class GroupMeClient:
         Args:
             name: Bot name
             group_id: Group ID where bot will be created
-            callback_url: Webhook callback URL
+            callback_url: Webhook callback URL (optional, only needed for receiving webhooks)
             avatar_url: Optional avatar image URL
 
         Returns:
