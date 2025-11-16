@@ -1,57 +1,64 @@
-"""Tests for GroupMeBot."""
+"""Tests for GroupMeBotManager."""
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from groupme_bot import GroupMeBot, Message
+from group_py import GroupMeBotManager, Message
 
 
 @pytest.fixture
-def mock_bot(mock_api_key, mock_bot_id, mock_group_id):
-    """Create a bot with mocked API calls."""
-    with patch("groupme_bot.bot.GroupMeClient") as mock_client:
-        bot = GroupMeBot(
-            api_key=mock_api_key, bot_id=mock_bot_id, group_id=mock_group_id, auto_create=False
+def mock_manager(mock_api_key, mock_bot_id, mock_group_id):
+    """Create a manager with mocked API calls."""
+    with patch("group_py.bot.GroupMeClient") as mock_client:
+        manager = GroupMeBotManager(
+            api_key=mock_api_key,
+            bot_id=mock_bot_id,
+            group_id=mock_group_id,
+            callback_url="https://test.com/webhook",
         )
-        bot.client = mock_client.return_value
-        yield bot
+        manager.client = mock_client.return_value
+        yield manager
 
 
-def test_bot_initialization(mock_api_key, mock_bot_id, mock_group_id):
-    """Test bot initialization."""
-    with patch("groupme_bot.bot.GroupMeClient"):
-        bot = GroupMeBot(
-            api_key=mock_api_key, bot_id=mock_bot_id, group_id=mock_group_id, auto_create=False
+def test_manager_initialization(mock_api_key, mock_bot_id, mock_group_id):
+    """Test manager initialization."""
+    with patch("group_py.bot.GroupMeClient"):
+        manager = GroupMeBotManager(
+            api_key=mock_api_key,
+            bot_id=mock_bot_id,
+            group_id=mock_group_id,
+            callback_url="https://test.com/webhook",
         )
 
-        assert bot.api_key == mock_api_key
-        assert bot.bot_id == mock_bot_id
-        assert bot.group_id == mock_group_id
+        assert manager.api_key == mock_api_key
+        assert manager.primary_bot.bot_id == mock_bot_id
+        assert manager.group_id == mock_group_id
 
 
-def test_bot_initialization_from_env():
-    """Test bot initialization from environment variables."""
+def test_manager_initialization_from_env():
+    """Test manager initialization from environment variables."""
     with patch.dict(
         "os.environ",
         {
             "GROUPME_API_KEY": "env_api_key",
             "GROUPME_BOT_ID": "env_bot_id",
             "GROUPME_GROUP_ID": "env_group_id",
+            "GROUPME_CALLBACK_URL": "https://test.com/webhook",
         },
     ):
-        with patch("groupme_bot.bot.GroupMeClient"):
-            bot = GroupMeBot(auto_create=False)
+        with patch("group_py.bot.GroupMeClient"):
+            manager = GroupMeBotManager()
 
-            assert bot.api_key == "env_api_key"
-            assert bot.bot_id == "env_bot_id"
-            assert bot.group_id == "env_group_id"
+            assert manager.api_key == "env_api_key"
+            assert manager.primary_bot.bot_id == "env_bot_id"
+            assert manager.group_id == "env_group_id"
 
 
-def test_command_decorator(mock_bot):
+def test_command_decorator(mock_manager):
     """Test @command decorator."""
     handler_called = False
     received_args = None
 
-    @mock_bot.command("/test")
+    @mock_manager.command("/test")
     def test_handler(message, args):
         nonlocal handler_called, received_args
         handler_called = True
@@ -67,17 +74,17 @@ def test_command_decorator(mock_bot):
         "sender_type": "user",
     }
 
-    mock_bot.process_message(data)
+    mock_manager.process_webhook(data)
 
     assert handler_called
     assert received_args == "hello world"
 
 
-def test_on_message_decorator(mock_bot):
+def test_on_message_decorator(mock_manager):
     """Test @on_message decorator."""
     handler_called = False
 
-    @mock_bot.on_message
+    @mock_manager.on_message
     def test_handler(message):
         nonlocal handler_called
         handler_called = True
@@ -92,17 +99,17 @@ def test_on_message_decorator(mock_bot):
         "sender_type": "user",
     }
 
-    mock_bot.process_message(data)
+    mock_manager.process_webhook(data)
 
     assert handler_called
 
 
-def test_on_unknown_command_decorator(mock_bot):
+def test_on_unknown_command_decorator(mock_manager):
     """Test @on_unknown_command decorator."""
     handler_called = False
     received_command = None
 
-    @mock_bot.on_unknown_command
+    @mock_manager.on_unknown_command
     def test_handler(message, command_text):
         nonlocal handler_called, received_command
         handler_called = True
@@ -118,17 +125,17 @@ def test_on_unknown_command_decorator(mock_bot):
         "sender_type": "user",
     }
 
-    mock_bot.process_message(data)
+    mock_manager.process_webhook(data)
 
     assert handler_called
     assert received_command == "/unknown test"
 
 
-def test_ignore_bot_messages(mock_bot):
-    """Test that bot ignores its own messages."""
+def test_ignore_bot_messages(mock_manager):
+    """Test that manager ignores bot messages."""
     handler_called = False
 
-    @mock_bot.on_message
+    @mock_manager.on_message
     def test_handler(message):
         nonlocal handler_called
         handler_called = True
@@ -143,17 +150,19 @@ def test_ignore_bot_messages(mock_bot):
         "sender_type": "bot",
     }
 
-    mock_bot.process_message(data)
+    mock_manager.process_webhook(data)
 
     assert not handler_called
 
 
-def test_send_message(mock_bot):
-    """Test send_message method."""
-    mock_bot.client.send_message = Mock()
+def test_bot_send_message(mock_manager):
+    """Test bot send_message method."""
+    mock_manager.client.send_message = Mock()
 
-    mock_bot.send_message("Hello, world!")
+    # Get primary bot and send message
+    bot = mock_manager.primary_bot
+    bot.send_message("Hello, world!")
 
-    mock_bot.client.send_message.assert_called_once_with(
-        mock_bot.bot_id, "Hello, world!", image_url=None, attachments=None
+    mock_manager.client.send_message.assert_called_once_with(
+        "Hello, world!", image_url=None
     )

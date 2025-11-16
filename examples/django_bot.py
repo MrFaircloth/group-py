@@ -1,7 +1,7 @@
 """
 Django integration example.
 
-This example shows how to integrate the GroupMe bot with Django,
+This example shows how to integrate the GroupMe bot manager with Django,
 including using Django's database for message storage.
 
 File structure:
@@ -12,10 +12,10 @@ File structure:
 """
 
 # ============================================================================
-# bot_instance.py - Create bot instance once
+# bot_instance.py - Create manager instance once
 # ============================================================================
 
-from groupme_bot import GroupMeBot
+from group_py import GroupMeBotManager
 from django.conf import settings
 
 # Build SQLAlchemy connection string from Django database settings
@@ -34,19 +34,22 @@ else:
     # Fallback to SQLite
     connection_string = f"sqlite:///{db['NAME']}"
 
-bot = GroupMeBot(
+manager = GroupMeBotManager(
     enable_storage=True,
     storage_connection=connection_string,  # Use Django's database!
 )
 
+# Get primary bot for sending messages
+bot = manager.primary_bot
 
-@bot.command("/echo")
+
+@manager.command("/echo")
 def handle_echo(message, args):
     """Echo command."""
     message.reply(f"You said: {args}")
 
 
-@bot.on_message
+@manager.on_message
 def handle_message(message):
     """Handle regular messages."""
     if message.text and "hello" in message.text.lower():
@@ -63,7 +66,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 import json
 
-# from .bot_instance import bot
+# from .bot_instance import manager
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -73,7 +76,7 @@ class GroupMeWebhook(View):
     def post(self, request):
         """Process incoming webhook."""
         data = json.loads(request.body)
-        bot.process_message(data)
+        manager.process_webhook(data)
         return JsonResponse({"ok": True})
 
 

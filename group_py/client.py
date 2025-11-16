@@ -50,9 +50,13 @@ class GroupMeClient:
             "bot": {
                 "name": name,
                 "group_id": group_id,
-                "callback_url": callback_url,
+                "active": True
             }
         }
+
+        if callback_url:
+            payload["bot"]["callback_url"] = callback_url
+
         if avatar_url:
             payload["bot"]["avatar_url"] = avatar_url
 
@@ -100,7 +104,7 @@ class GroupMeClient:
             attachments: Optional list of attachment dicts for advanced use
 
         Returns:
-            Response dict from GroupMe API
+            Response dict with status_code (202 for success, empty body)
 
         Raises:
             APIError: If message sending fails or bot_id not set
@@ -122,7 +126,8 @@ class GroupMeClient:
         try:
             response = self.session.post(url, json=payload, timeout=10)
             response.raise_for_status()
-            return response.json()
+            # GroupMe returns 202 Accepted with empty body for successful sends
+            return {"status_code": response.status_code}
         except requests.exceptions.RequestException as e:
             raise APIError(f"Failed to send message: {e}")
 

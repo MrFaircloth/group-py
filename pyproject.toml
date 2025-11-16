@@ -43,7 +43,7 @@ Repository = "https://github.com/mfaircloth/group-py"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["groupme_bot*"]
+include = ["group_py*"]
 exclude = ["tests*", "examples*"]
 
 [tool.pytest.ini_options]

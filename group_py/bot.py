@@ -1,4 +1,4 @@
-"""Main GroupMe bot class with webhook handling and command routing."""
+"""GroupMe bot manager with webhook handling and command routing."""
 
 import os
 import atexit
@@ -8,39 +8,58 @@ from .client import GroupMeClient
 from .models import Message
 from .storage import MessageStorage
 from .exceptions import ConfigurationError
+from .sender import GroupMeBot
 
 
-class GroupMeBot:
+class GroupMeBotManager:
     """
-    Main bot class for handling GroupMe webhooks and sending messages.
-    Supports command routing, async commands, and optional message storage.
+    Manager class for handling GroupMe webhooks, command routing, and bot creation.
+
+    The manager creates and manages multiple GroupMeBot instances, handles webhook
+    processing, command routing, and provides shared storage across all bots.
+
+    Example:
+        manager = GroupMeBotManager(
+            api_key="...",
+            group_id="...",
+            callback_url="https://...",
+            enable_storage=True
+        )
+
+        # Get the primary webhook bot
+        system_bot = manager.primary_bot
+
+        # Create additional bots
+        bean_bot = manager.create_bot(name="Bean", bot_id="...")
+
+        # Register commands
+        @manager.command("/hello")
+        def hello(message, args):
+            system_bot.send_message("Hello!")
     """
 
     def __init__(
         self,
         api_key: str = None,
-        bot_id: str = None,
         group_id: str = None,
         callback_url: str = None,
-        bot_name: str = "Bot",
+        bot_name: str = "System",
+        bot_id: str = None,
         avatar_url: str = None,
-        auto_create: bool = True,
         enable_storage: bool = False,
         storage_connection: str = None,
     ):
         """
-        Initialize the bot with API credentials.
-        Falls back to environment variables if not provided.
+        Initialize the bot manager and create the primary webhook bot.
 
         Args:
             api_key: GroupMe API key (or set GROUPME_API_KEY env var)
-            bot_id: Existing bot ID (or set GROUPME_BOT_ID env var)
-            group_id: Group ID for bot creation (or set GROUPME_GROUP_ID env var)
-            callback_url: Webhook callback URL (or set GROUPME_CALLBACK_URL env var)
-            bot_name: Name for auto-created bot (default: "Bot")
-            avatar_url: Avatar URL for auto-created bot
-            auto_create: If True and no bot_id provided, create a bot automatically
-            enable_storage: If True, enable SQLite message storage
+            group_id: Group ID (or set GROUPME_GROUP_ID env var)
+            callback_url: Webhook callback URL for receiving messages
+            bot_name: Name for the primary bot (default: "System")
+            bot_id: Existing bot ID for primary bot (optional, will auto-create if not provided)
+            avatar_url: Avatar URL for the primary bot
+            enable_storage: If True, enable SQLite message storage for all bots
             storage_connection: Custom DB path (e.g., "sqlite:///myapp.db")
 
         Raises:
@@ -48,11 +67,8 @@ class GroupMeBot:
         """
         # Load configuration
         self.api_key = api_key or os.getenv("GROUPME_API_KEY")
-        self.bot_id = bot_id or os.getenv("GROUPME_BOT_ID")
         self.group_id = group_id or os.getenv("GROUPME_GROUP_ID")
         self.callback_url = callback_url or os.getenv("GROUPME_CALLBACK_URL")
-        self.bot_name = bot_name
-        self.avatar_url = avatar_url
 
         if not self.api_key:
             raise ConfigurationError(
@@ -60,8 +76,20 @@ class GroupMeBot:
                 "or pass api_key to __init__"
             )
 
-        # Initialize client
-        self.client = GroupMeClient(self.api_key, self.bot_id)
+        if not self.group_id:
+            raise ConfigurationError(
+                "Group ID required. Set GROUPME_GROUP_ID environment variable "
+                "or pass group_id to __init__"
+            )
+
+        # if not self.callback_url:
+        #     raise ConfigurationError(
+        #         "Callback URL required for webhook handling. Set GROUPME_CALLBACK_URL "
+        #         "environment variable or pass callback_url to __init__"
+        #     )
+
+        # Initialize shared client (bot_id will be swapped by individual bots)
+        self.client = GroupMeClient(self.api_key)
 
         # Handler storage
         self._handlers: List[Callable] = []
@@ -69,68 +97,153 @@ class GroupMeBot:
         self._async_commands: Dict[str, tuple] = {}  # command -> (handler, ack_message)
         self._unknown_command_handler: Optional[Callable] = None
 
-        # Auto-create tracking
-        self._auto_created = False
-
         # Storage setup
         self.storage: Optional[MessageStorage] = None
-        self.db_connection_string: Optional[str] = None
         if enable_storage:
-            if storage_connection:
-                self.db_connection_string = storage_connection
-            else:
-                self.db_connection_string = "sqlite:///messages.db"
-            self.storage = MessageStorage(self.db_connection_string)
+            connection_string = storage_connection or "sqlite:///messages.db"
+            self.storage = MessageStorage(connection_string)
 
-        # Auto-create bot if needed
-        if auto_create and not self.bot_id:
-            if not self.group_id or not self.callback_url:
-                raise ConfigurationError(
-                    "To auto-create a bot, provide group_id and callback_url "
-                    "(or set GROUPME_GROUP_ID and GROUPME_CALLBACK_URL env vars)"
-                )
-            self._create_bot()
+        # Bot registry
+        self._bots: Dict[str, GroupMeBot] = {}
+        self._auto_created_bot_ids: List[str] = []
 
-        # Validate we have what we need
-        if not self.bot_id:
-            raise ConfigurationError("bot_id is required (or enable auto_create)")
+        # Create primary webhook bot immediately
+        primary_bot_id = bot_id or os.getenv("GROUPME_BOT_ID")
+        if not primary_bot_id:
+            # Auto-create the primary bot
+            primary_bot_id = self._create_bot_on_groupme(bot_name, avatar_url)
+            self._auto_created_bot_ids.append(primary_bot_id)
+
+        # Create the primary bot instance
+        self._primary_bot = GroupMeBot(
+            bot_id=primary_bot_id,
+            name=bot_name,
+            client=self.client,
+            group_id=self.group_id,
+            storage=self.storage,
+        )
+        self._bots[primary_bot_id] = self._primary_bot
+
+        print(f"✓ Primary bot '{bot_name}' ready with ID: {primary_bot_id}")
 
         # Register cleanup on exit
         atexit.register(self._cleanup)
 
-    def _create_bot(self):
-        """Create a new bot and store its ID."""
+    @property
+    def primary_bot(self) -> GroupMeBot:
+        """Get the primary webhook-handling bot."""
+        return self._primary_bot
+
+    def _create_bot_on_groupme(self, name: str, avatar_url: Optional[str] = None) -> str:
+        """
+        Create a new bot on GroupMe and return its ID.
+
+        Args:
+            name: Bot name
+            avatar_url: Optional avatar URL
+
+        Returns:
+            Bot ID of the created bot
+
+        Raises:
+            ConfigurationError: If bot creation fails
+        """
         try:
             response = self.client.create_bot(
-                name=self.bot_name,
+                name=name,
                 group_id=self.group_id,
                 callback_url=self.callback_url,
-                avatar_url=self.avatar_url,
+                avatar_url=avatar_url,
             )
-            self.bot_id = response["response"]["bot"]["bot_id"]
-            self.client.bot_id = self.bot_id
-            self._auto_created = True
-            print(f"✓ Created bot '{self.bot_name}' with ID: {self.bot_id}")
+            bot_id = response["response"]["bot"]["bot_id"]
+            print(f"✓ Created bot '{name}' on GroupMe with ID: {bot_id}")
+            return bot_id
         except Exception as e:
             raise ConfigurationError(f"Failed to create bot: {e}")
 
     def _cleanup(self):
-        """Clean up auto-created bot on exit."""
-        if self._auto_created and self.bot_id:
+        """Clean up auto-created bots on exit."""
+        for bot_id in self._auto_created_bot_ids:
             try:
-                self.client.destroy_bot(self.bot_id)
-                print(f"✓ Destroyed bot {self.bot_id}")
+                self.client.destroy_bot(bot_id)
+                print(f"✓ Destroyed auto-created bot {bot_id}")
             except Exception as e:
-                print(f"⚠ Warning: Failed to destroy bot: {e}")
+                print(f"⚠ Warning: Failed to destroy bot {bot_id}: {e}")
 
-    def destroy(self):
-        """Manually destroy the bot (if auto-created)."""
-        if self._auto_created and self.bot_id:
-            self.client.destroy_bot(self.bot_id)
-            self._auto_created = False
-            print(f"✓ Destroyed bot {self.bot_id}")
-        elif not self._auto_created:
-            print("⚠ Warning: Bot was not auto-created, not destroying")
+    def destroy_bot(self, bot_id: str):
+        """
+        Manually destroy a bot (only if it was auto-created by this manager).
+
+        Args:
+            bot_id: Bot ID to destroy
+        """
+        if bot_id in self._auto_created_bot_ids:
+            self.client.destroy_bot(bot_id)
+            self._auto_created_bot_ids.remove(bot_id)
+            if bot_id in self._bots:
+                del self._bots[bot_id]
+            print(f"✓ Destroyed bot {bot_id}")
+        else:
+            print(f"⚠ Warning: Bot {bot_id} was not auto-created by this manager, not destroying")
+
+    def create_bot(
+        self,
+        name: str,
+        bot_id: Optional[str] = None,
+        avatar_url: Optional[str] = None,
+        auto_create: bool = True,
+    ) -> GroupMeBot:
+        """
+        Create a new bot instance managed by this manager.
+
+        All bots created by this manager share the same storage (if enabled).
+
+        Args:
+            name: Bot name
+            bot_id: Existing bot ID (optional, will auto-create if not provided and auto_create=True)
+            avatar_url: Avatar URL for auto-created bots
+            auto_create: If True and bot_id not provided, create a new bot on GroupMe
+
+        Returns:
+            GroupMeBot instance
+
+        Raises:
+            ConfigurationError: If bot_id not provided and auto_create=False
+
+        Example:
+            # Create a bot with existing bot_id
+            bean = manager.create_bot(name="Bean", bot_id="existing_bot_id")
+
+            # Auto-create a new bot
+            coffee = manager.create_bot(name="Coffee")  # Will create on GroupMe
+        """
+        # Check if bot already exists
+        if bot_id and bot_id in self._bots:
+            print(f"⚠ Bot {bot_id} already exists in manager, returning existing instance")
+            return self._bots[bot_id]
+
+        # Get or create bot_id
+        if not bot_id:
+            if auto_create:
+                bot_id = self._create_bot_on_groupme(name, avatar_url)
+                self._auto_created_bot_ids.append(bot_id)
+            else:
+                raise ConfigurationError(
+                    f"bot_id required for bot '{name}' (or set auto_create=True)"
+                )
+
+        # Create bot instance
+        bot = GroupMeBot(
+            bot_id=bot_id,
+            name=name,
+            client=self.client,
+            group_id=self.group_id,
+            storage=self.storage,
+        )
+
+        self._bots[bot_id] = bot
+        print(f"✓ Bot '{name}' ready with ID: {bot_id}")
+        return bot
 
     def on_message(self, func: Callable) -> Callable:
         """
@@ -204,13 +317,19 @@ class GroupMeBot:
         self._unknown_command_handler = func
         return func
 
-    def process_message(self, data: dict) -> None:
+    def process_webhook(self, data: dict) -> None:
         """
         Process a GroupMe webhook payload.
         This should be called from your web framework's webhook endpoint.
 
         Args:
             data: The JSON payload from GroupMe webhook
+
+        Example:
+            @app.route("/webhook", methods=["POST"])
+            def webhook():
+                manager.process_webhook(request.get_json())
+                return "ok", 200
         """
         # Store message first (if storage enabled)
         if self.storage:
@@ -222,8 +341,8 @@ class GroupMeBot:
         # Parse the message
         message = Message.from_dict(data)
 
-        # Inject reply functionality
-        message.reply = lambda text, **kwargs: self.send_message(text, **kwargs)
+        # Inject reply functionality using primary bot
+        message.reply = lambda text, **kwargs: self.primary_bot.send_message(text, **kwargs)
 
         # Skip bot's own messages
         if message.sender_type == "bot":
@@ -247,7 +366,7 @@ class GroupMeBot:
                 # Send acknowledgment if configured
                 if ack_message:
                     try:
-                        self.send_message(ack_message)
+                        self.primary_bot.send_message(ack_message)
                     except Exception as e:
                         print(f"⚠ Failed to send ack message: {e}")
 
@@ -288,36 +407,10 @@ class GroupMeBot:
             except Exception as e:
                 print(f"⚠ Error in handler {handler.__name__}: {e}")
 
-    def send_message(self, text: str, image_url: str = None, **kwargs) -> Dict[str, Any]:
-        """
-        Send a message directly (without processing a webhook).
-
-        Args:
-            text: Message text
-            image_url: Optional image URL
-            **kwargs: Additional arguments passed to client.send_message()
-
-        Returns:
-            Response from GroupMe API
-        """
-        try:
-            response = self.client.send_message(text, image_url=image_url, **kwargs)
-
-            # Store sent message (if storage enabled)
-            if self.storage and self.group_id:
-                try:
-                    self.storage.save_sent(text, self.group_id, self.bot_id, image_url)
-                except Exception as e:
-                    print(f"⚠ Failed to store sent message: {e}")
-
-            return response
-        except Exception as e:
-            print(f"⚠ Failed to send message: {e}")
-            raise
-
-    def send_location(self, name: str, lat: float, lng: float, text: str = "") -> Dict[str, Any]:
-        """Send a location attachment."""
-        return self.client.send_location(name, lat, lng, text)
+    # Keep process_message as an alias for backward compatibility during transition
+    def process_message(self, data: dict) -> None:
+        """Alias for process_webhook (deprecated, use process_webhook instead)."""
+        return self.process_webhook(data)
 
     def list_groups(self) -> List[Dict[str, Any]]:
         """List all groups the user belongs to (helpful for finding group_id)."""
@@ -334,7 +427,7 @@ class GroupMeBot:
             SQLAlchemy Session object
 
         Example:
-            from groupme_bot.storage import StoredMessage
+            from group_py.storage import StoredMessage
 
             session = bot.get_db_session()
             try:
@@ -344,7 +437,7 @@ class GroupMeBot:
                     .all()
 
                 # Convert to Message objects
-                from groupme_bot import Message
+                from group_py import Message
                 import json
                 msg_objects = [Message.from_dict(json.loads(m.raw_json)) for m in messages]
             finally:

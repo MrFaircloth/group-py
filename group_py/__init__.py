@@ -1,14 +1,14 @@
 """GroupMe bot framework with command routing and storage."""
 
-from .bot import GroupMeBot
-from .sender import GroupMeSender
+from .bot import GroupMeBotManager
+from .sender import GroupMeBot
 from .models import Message
 from .exceptions import GroupMeBotError, ConfigurationError, APIError
 
 __version__ = "2.0.0"
 __all__ = [
+    "GroupMeBotManager",
     "GroupMeBot",
-    "GroupMeSender",
     "Message",
     "GroupMeBotError",
     "ConfigurationError",

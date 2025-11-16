@@ -1,7 +1,7 @@
 """Tests for Message model."""
 
 import pytest
-from groupme_bot import Message
+from group_py import Message
 
 
 def test_message_from_dict(sample_message_data):

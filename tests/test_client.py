@@ -2,8 +2,8 @@
 
 import pytest
 from unittest.mock import Mock, patch
-from groupme_bot.client import GroupMeClient
-from groupme_bot.exceptions import APIError
+from group_py.client import GroupMeClient
+from group_py.exceptions import APIError
 
 
 @pytest.fixture

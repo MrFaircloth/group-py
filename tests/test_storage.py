@@ -1,8 +1,8 @@
 """Tests for MessageStorage."""
 
 import pytest
-from groupme_bot.storage import MessageStorage, StoredMessage
-from groupme_bot import Message
+from group_py.storage import MessageStorage, StoredMessage
+from group_py import Message
 
 
 def test_storage_initialization(temp_db):

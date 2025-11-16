@@ -87,7 +87,7 @@ class Message:
             List of Message objects
 
         Example:
-            from groupme_bot.storage import StoredMessage
+            from group_py.storage import StoredMessage
             session = bot.get_db_session()
             results = session.query(StoredMessage)\\
                 .filter(StoredMessage.text.like('%pizza%'))\\

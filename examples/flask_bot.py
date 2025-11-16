@@ -1,26 +1,29 @@
 """Flask integration example with commands, storage, and async handlers."""
 
 from flask import Flask, request
-from groupme_bot import GroupMeBot
+from group_py import GroupMeBotManager
 
-# Initialize bot with storage enabled
-bot = GroupMeBot(
+# Initialize manager - creates primary bot automatically
+manager = GroupMeBotManager(
+    api_key="your_api_key",
     group_id="your_group_id",
     callback_url="https://yourserver.com/groupme-webhook",
     bot_name="Flask Bot",
     enable_storage=True,
-    auto_create=True,  # Will create and destroy automatically
 )
+
+# Get primary bot for sending messages
+bot = manager.primary_bot
 
 
 # Command: /prompt - sends to LLM (async example)
-@bot.async_command("/prompt", ack_message="🤔 Thinking...")
+@manager.async_command("/prompt", ack_message="🤔 Thinking...")
 def handle_prompt(message, args):
     """Handle LLM prompts with context."""
     import time
 
     # Get conversation context
-    context = bot.get_recent_messages(limit=20, as_objects=True)
+    context = manager.get_recent_messages(limit=20, as_objects=True)
     context_text = "\n".join([f"{m.name}: {m.text}" for m in reversed(context) if m.text])
 
     # Simulate LLM call
@@ -31,12 +34,12 @@ def handle_prompt(message, args):
 
 
 # Command: /search - search message history
-@bot.command("/search")
+@manager.command("/search")
 def handle_search(message, args):
     """Search message history."""
-    from groupme_bot.storage import StoredMessage
+    from group_py.storage import StoredMessage
 
-    session = bot.get_db_session()
+    session = manager.get_db_session()
     try:
         results = (
             session.query(StoredMessage)
@@ -46,7 +49,7 @@ def handle_search(message, args):
             .all()
         )
 
-        from groupme_bot import Message
+        from group_py import Message
 
         messages = Message.from_query_results(results)
 
@@ -62,13 +65,13 @@ def handle_search(message, args):
 
 
 # Command: /stats - show bot statistics
-@bot.command("/stats")
+@manager.command("/stats")
 def handle_stats(message, args):
     """Show message statistics."""
-    from groupme_bot.storage import StoredMessage
+    from group_py.storage import StoredMessage
     from sqlalchemy import func
 
-    session = bot.get_db_session()
+    session = manager.get_db_session()
     try:
         total = session.query(func.count(StoredMessage.id)).scalar()
         message.reply(f"📊 Total messages stored: {total}")
@@ -77,14 +80,14 @@ def handle_stats(message, args):
 
 
 # Unknown command handler
-@bot.on_unknown_command
+@manager.on_unknown_command
 def handle_unknown(message, command_text):
     """Handle unknown commands."""
     message.reply(f"❓ Unknown command. Try:\n/prompt <text>\n/search <query>\n/stats")
 
 
 # Catch-all for regular messages
-@bot.on_message
+@manager.on_message
 def handle_message(message):
     """Handle regular messages."""
     if message.text and "hello" in message.text.lower():
@@ -99,7 +102,7 @@ app = Flask(__name__)
 def webhook():
     """Handle GroupMe webhook callbacks."""
     data = request.get_json()
-    bot.process_message(data)
+    manager.process_webhook(data)
     return "ok", 200
 
 

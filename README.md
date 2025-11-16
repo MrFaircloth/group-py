@@ -31,7 +31,7 @@ pip install -e .
 ## Quick Start
 
 ```python
-from groupme_bot import GroupMeBot
+from group_py import GroupMeBot
 
 # Initialize bot (auto-creates if needed)
 bot = GroupMeBot(
@@ -63,7 +63,7 @@ def webhook():
 ### 2. Find Your Group ID
 
 ```python
-from groupme_bot import GroupMeBot
+from group_py import GroupMeBot
 
 bot = GroupMeBot(api_key="your_api_key")
 groups = bot.list_groups()
@@ -99,7 +99,7 @@ ngrok http 3000
 Commands are registered using decorators and automatically route messages to handlers:
 
 ```python
-from groupme_bot import GroupMeBot
+from group_py import GroupMeBot
 
 bot = GroupMeBot()
 
@@ -178,7 +178,7 @@ for msg in messages:
     print(f"{msg.name}: {msg.text}")
 
 # Custom queries with SQLAlchemy
-from groupme_bot.storage import StoredMessage
+from group_py.storage import StoredMessage
 
 session = bot.get_db_session()
 try:
@@ -188,7 +188,7 @@ try:
         .limit(10)\
         .all()
 
-    from groupme_bot import Message
+    from group_py import Message
     messages = Message.from_query_results(results)
 finally:
     session.close()
@@ -236,7 +236,7 @@ bot = GroupMeBot(
 Lightweight send-only bot (no webhook handling).
 
 ```python
-from groupme_bot import GroupMeSender
+from group_py import GroupMeSender
 
 sender = GroupMeSender(
     bot_id="your_bot_id",
@@ -279,7 +279,7 @@ Message object passed to handlers.
 
 ```python
 from flask import Flask, request
-from groupme_bot import GroupMeBot
+from group_py import GroupMeBot
 
 app = Flask(__name__)
 bot = GroupMeBot(enable_storage=True)
@@ -301,7 +301,7 @@ if __name__ == "__main__":
 
 ```python
 # bot_instance.py
-from groupme_bot import GroupMeBot
+from group_py import GroupMeBot
 from django.conf import settings
 
 # Use Django's database
@@ -335,7 +335,7 @@ class GroupMeWebhook(View):
 ### Multiple Bots
 
 ```python
-from groupme_bot import GroupMeBot, GroupMeSender
+from group_py import GroupMeBot, GroupMeSender
 
 # Main bot handles webhooks
 system_bot = GroupMeBot(
@@ -392,7 +392,7 @@ bot = GroupMeBot(
 ### Custom Queries
 
 ```python
-from groupme_bot.storage import StoredMessage
+from group_py.storage import StoredMessage
 from sqlalchemy import func
 
 session = bot.get_db_session()
