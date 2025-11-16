@@ -4,19 +4,19 @@ A simplified Python framework for building GroupMe bots with command routing, as
 
 ## Features
 
-✅ **Simple Setup** - Minimal configuration with environment variables
-✅ **Command Routing** - Decorator-based command handlers
-✅ **Async Commands** - Automatic threading for long-running operations
-✅ **Message Storage** - SQLAlchemy-based storage (SQLite, PostgreSQL, MySQL)
-✅ **Multi-Bot Support** - Run multiple bots in one application
-✅ **Rich Media** - Send images and locations
-✅ **Framework Agnostic** - Works with Flask, Django, FastAPI, or any web framework
-✅ **Type Hints** - Full type annotations throughout
+- ✅ **Simple Setup** - Minimal configuration with environment variables
+- ✅ **Command Routing** - Decorator-based command handlers
+- ✅ **Async Commands** - Automatic threading for long-running operations
+- ✅ **Message Storage** - SQLAlchemy-based storage (SQLite, PostgreSQL, MySQL)
+- ✅ **Multi-Bot Support** - Run multiple bots in one application
+- ✅ **Rich Media** - Send images and locations
+- ✅ **Framework Agnostic** - Works with Flask, Django, FastAPI, or any web framework
+- ✅ **Type Hints** - Full type annotations throughout
 
 ## Installation
 
 ```bash
-pip install groupme-bot
+pip install group-py
 ```
 
 Or install from source:
