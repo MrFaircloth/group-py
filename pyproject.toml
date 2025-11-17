@@ -1,7 +1,71 @@
-# python -m pytest \
-# --run-integration tests/test_bot_integration.py
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "group-py"
+version = "2.0.0"
+description = "Simplified GroupMe bot framework with command routing and storage"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "GroupMe Bot Contributors"}
+]
+keywords = ["groupme", "bot", "chat", "messaging", "api"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "sqlalchemy>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flask>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mfaircloth/group-py"
+Repository = "https://github.com/mfaircloth/group-py"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["group_py*"]
+exclude = ["tests*", "examples*"]
+
 [tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 markers = [
     "integration: mark test as integration test requiring live API",
     "slow: mark test as slow to run"
 ]
+addopts = "-v --strict-markers"
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+)/
+'''

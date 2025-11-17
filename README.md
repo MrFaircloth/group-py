@@ -1,447 +1,501 @@
-# group-py
-Groupme API Handler
+# GroupMe Bot Framework
 
-## Purpose
-This module is to be used to simplify interactions with the GroupMe API.
+A simplified Python framework for building GroupMe bots with command routing, async support, and message storage.
 
+## Features
 
-### Authentication
-Groupme API can be accessed with the Users API Token.
-[See the Groupme Developers documenation](https://dev.groupme.com/). The API token can be found at the top right by your username. 
+- ✅ **Simple Setup** - Minimal configuration with environment variables
+- ✅ **Command Routing** - Decorator-based command handlers
+- ✅ **Async Commands** - Automatic threading for long-running operations
+- ✅ **Message Storage** - SQLAlchemy-based storage (SQLite, PostgreSQL, MySQL)
+- ✅ **Multi-Bot Support** - Run multiple bots in one application
+- ✅ **Rich Media** - Send images and locations
+- ✅ **Framework Agnostic** - Works with Flask, Django, FastAPI, or any web framework
+- ✅ **Type Hints** - Full type annotations throughout
 
-All of these commands assume the user has the required permissions for their groups.
+## Installation
 
-The access token can be set using the `GROUPME_API_TOKEN` environment variable.
-
-
-### Message Router
-
-The message router allows you to handle GroupMe messages by routing them to appropriate handlers based on custom logic. Handlers receive a `HandlerContext` containing the bot, router, and message, allowing them to post responses and access other handlers.
-
-#### Basic Usage with CommandHandler
-
-For simple command-based handlers, use `CommandHandler` which automatically handles command matching:
-
-``` py
-from group_py import CommandHandler, MessageRouter, HandlerContext
-
-class ReadyHandler(CommandHandler):
-    command_str = '!ready'  # Define the command once
-
-    @staticmethod
-    def help():
-        return 'Responds when users are ready.'
-
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        '''Executes when !ready command is received.'''
-        context.bot.post_message(f'{context.message.name} is ready!')
-
-# Create router with handlers and bot
-bot = GroupMeBot(bot_id='your_bot_id')
-router = MessageRouter([ReadyHandler], bot=bot)
+```bash
+pip install group-py
 ```
 
-#### Advanced: Custom Message Matching
+Or install from source:
 
-For more complex matching logic, override `can_handle()`:
-
-``` py
-from group_py import CommandHandler, MessageRouter, HandlerContext
-
-class PingHandler(CommandHandler):
-    command_str = '!ping'
-
-    @staticmethod
-    def help():
-        return 'Responds with pong.'
-
-    @classmethod
-    def can_handle(cls, message):
-        # Custom logic: match command or respond to mentions
-        return (message.text.lower().strip() == cls.command_str or
-                'ping' in message.text.lower())
-
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        context.bot.post_message('Pong!')
-
-router = MessageRouter([PingHandler], bot=bot)
+```bash
+git clone https://github.com/mfaircloth/group-py.git
+cd group-py
+pip install -e .
 ```
 
-#### Using HandlerContext
 
-The `HandlerContext` passed to `execute()` provides access to:
-- `context.bot` - The GroupMeBot instance for posting messages
-- `context.router` - The MessageRouter for accessing other handlers
-- `context.message` - The Message object with sender info, text, etc.
+## Quick Start
 
-``` py
-class InfoHandler(CommandHandler):
-    command_str = '!info'
+```python
+from group_py import GroupMeBot
 
-    @staticmethod
-    def help():
-        return 'Shows available commands.'
+# Initialize bot (auto-creates if needed)
+bot = GroupMeBot(
+    group_id="your_group_id",
+    callback_url="https://yourserver.com/webhook",
+    enable_storage=True
+)
 
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        # Access message details
-        sender = context.message.name
+# Register a command
+@bot.command("/hello")
+def hello(message, args):
+    message.reply(f"Hi {message.name}!")
 
-        # Get all available commands from router
-        commands = []
-        for route in context.router.get_routes.values():
-            if hasattr(route.handler, 'command_str'):
-                cmd = route.handler.command_str
-                help_text = route.handler.help()
-                commands.append(f'{cmd}: {help_text}')
-
-        # Post response
-        response = f'Hi {sender}!\n' + '\n'.join(commands)
-        context.bot.post_message(response)
-
-router = MessageRouter([InfoHandler], bot=bot)
+# In your Flask/Django view:
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    bot.process_message(request.get_json())
+    return "ok", 200
 ```
 
-#### Flask Integration Example
+## Getting Started
 
-``` py
+### 1. Get Your API Key
+
+1. Go to [GroupMe Developer Portal](https://dev.groupme.com/)
+2. Sign in with your GroupMe account
+3. Your API key is at the top right by your username
+
+### 2. Find Your Group ID
+
+```python
+from group_py import GroupMeBot
+
+bot = GroupMeBot(api_key="your_api_key")
+groups = bot.list_groups()
+
+for group in groups:
+    print(f"{group['name']}: {group['id']}")
+```
+
+### 3. Set Up Environment Variables
+
+Create a `.env` file:
+
+```bash
+GROUPME_API_KEY=your_api_key_here
+GROUPME_GROUP_ID=your_group_id_here
+GROUPME_CALLBACK_URL=https://yourserver.com/webhook
+```
+
+### 4. Set Up Webhook (for local development)
+
+Use [ngrok](https://ngrok.com/) to expose your local server:
+
+```bash
+ngrok http 3000
+# Use the HTTPS URL as your callback_url
+```
+
+
+## Core Concepts
+
+### Command Routing
+
+Commands are registered using decorators and automatically route messages to handlers:
+
+```python
+from group_py import GroupMeBot
+
+bot = GroupMeBot()
+
+# Simple command
+@bot.command("/hello")
+def hello_command(message, args):
+    """args contains everything after '/hello'"""
+    message.reply(f"Hello {message.name}!")
+
+# Command with arguments
+@bot.command("/echo")
+def echo_command(message, args):
+    message.reply(f"You said: {args}")
+```
+
+### Async Commands
+
+For long-running operations, use async commands that run in background threads:
+
+```python
+@bot.async_command("/prompt", ack_message="🤔 Thinking...")
+def handle_prompt(message, args):
+    """This runs in a background thread"""
+    import time
+    time.sleep(5)  # Long operation
+
+    # Get conversation context
+    context = bot.get_recent_messages(limit=20, as_objects=True)
+
+    # Process with LLM, etc.
+    result = process_with_llm(args, context)
+    message.reply(result)
+```
+
+The bot immediately sends the acknowledgment message, then processes the command in the background.
+
+### Message Handlers
+
+Handle all messages that don't match commands:
+
+```python
+@bot.on_message
+def handle_message(message):
+    """Called for non-command messages"""
+    if "hello" in message.text.lower():
+        message.reply("Hi there!")
+
+    # Check for attachments
+    if message.has_image():
+        message.reply("Nice image!")
+```
+
+### Unknown Commands
+
+Handle unrecognized commands:
+
+```python
+@bot.on_unknown_command
+def handle_unknown(message, command_text):
+    message.reply(f"Unknown command: {command_text}\nTry /help")
+```
+
+### Message Storage
+
+Enable SQLAlchemy-based storage to save and query message history:
+
+```python
+bot = GroupMeBot(
+    enable_storage=True,
+    storage_connection="sqlite:///messages.db"  # or PostgreSQL, MySQL
+)
+
+# Get recent messages
+messages = bot.get_recent_messages(limit=50, as_objects=True)
+for msg in messages:
+    print(f"{msg.name}: {msg.text}")
+
+# Custom queries with SQLAlchemy
+from group_py.storage import StoredMessage
+
+session = bot.get_db_session()
+try:
+    results = session.query(StoredMessage)\
+        .filter(StoredMessage.text.like('%pizza%'))\
+        .order_by(StoredMessage.created_at.desc())\
+        .limit(10)\
+        .all()
+
+    from group_py import Message
+    messages = Message.from_query_results(results)
+finally:
+    session.close()
+```
+
+
+## API Reference
+
+### GroupMeBot
+
+Main bot class for handling webhooks and sending messages.
+
+#### Constructor
+
+```python
+bot = GroupMeBot(
+    api_key=None,              # Or set GROUPME_API_KEY env var
+    bot_id=None,               # Or set GROUPME_BOT_ID env var
+    group_id=None,             # Or set GROUPME_GROUP_ID env var
+    callback_url=None,         # Or set GROUPME_CALLBACK_URL env var
+    bot_name="Bot",            # Name for auto-created bot
+    avatar_url=None,           # Avatar for auto-created bot
+    auto_create=True,          # Auto-create bot if bot_id not provided
+    enable_storage=False,      # Enable message storage
+    storage_connection=None    # Custom DB connection string
+)
+```
+
+#### Methods
+
+- **`@bot.on_message`** - Decorator to register message handler
+- **`@bot.command(prefix)`** - Decorator to register command handler
+- **`@bot.async_command(prefix, ack_message=None)`** - Decorator for async command
+- **`@bot.on_unknown_command`** - Decorator for unknown command handler
+- **`bot.process_message(data)`** - Process webhook payload (call from your web framework)
+- **`bot.send_message(text, image_url=None, **kwargs)`** - Send a message
+- **`bot.send_location(name, lat, lng, text="")`** - Send a location
+- **`bot.list_groups()`** - List all groups (helpful for finding group_id)
+- **`bot.get_db_session()`** - Get SQLAlchemy session for custom queries
+- **`bot.get_recent_messages(limit=50, as_objects=False)`** - Get recent messages
+- **`bot.destroy()`** - Manually destroy auto-created bot
+
+### GroupMeSender
+
+Lightweight send-only bot (no webhook handling).
+
+```python
+from group_py import GroupMeSender
+
+sender = GroupMeSender(
+    bot_id="your_bot_id",
+    api_key="your_api_key"
+)
+
+sender.send_message("Hello!")
+sender.send_location("Office", 37.7749, -122.4194)
+```
+
+### Message
+
+Message object passed to handlers.
+
+#### Properties
+
+- `message.id` - Message ID
+- `message.text` - Message text (can be None)
+- `message.user_id` - Sender user ID
+- `message.name` - Sender name
+- `message.group_id` - Group ID
+- `message.created_at` - Unix timestamp
+- `message.system` - Boolean, system message
+- `message.sender_type` - "user" or "bot"
+- `message.avatar_url` - Sender avatar URL
+- `message.attachments` - List of attachments
+
+#### Methods
+
+- `message.reply(text, **kwargs)` - Reply to message
+- `message.has_image()` - Check for image attachment
+- `message.get_image_url()` - Get first image URL
+- `message.has_location()` - Check for location attachment
+- `message.get_location()` - Get (lat, lng, name) tuple
+
+
+## Integration Examples
+
+### Flask
+
+```python
 from flask import Flask, request
-from group_py import MessageRouter, Message, GroupMeBot
+from group_py import GroupMeBot
 
 app = Flask(__name__)
+bot = GroupMeBot(enable_storage=True)
 
-# Initialize bot and router
-bot = GroupMeBot(bot_id='your_bot_id')
-router = MessageRouter([ReadyHandler, PingHandler], bot=bot)
+@bot.command("/hello")
+def hello(message, args):
+    message.reply(f"Hi {message.name}!")
 
-@app.route('/callback', methods=['POST'])
-def callback():
-    raw_message_data = request.get_json()
-    message = Message(raw_message_data)
-    result = router.route(message)
-    return result
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    bot.process_message(request.get_json())
+    return "ok", 200
+
+if __name__ == "__main__":
+    app.run(port=3000)
 ```
 
+### Django
 
-### Bots
-
-Bots can be created, managed, and used to post messages to GroupMe groups.
-
-#### Creating a New Bot
-
-``` py
+```python
+# bot_instance.py
 from group_py import GroupMeBot
+from django.conf import settings
+
+# Use Django's database
+db = settings.DATABASES['default']
+connection = f"postgresql://{db['USER']}:{db['PASSWORD']}@{db['HOST']}/{db['NAME']}"
 
 bot = GroupMeBot(
-    name='my_awesome_bot',
-    group_id='1234567890',
-    avatar_url='https://i.groupme.com/123456789',
-    callback_url='https://example.com/bots/callback'
+    enable_storage=True,
+    storage_connection=connection
 )
 
-# Create the bot in the group
-bot_details = bot.create()
-print(bot_details)
-# {
-#   'bot_id': '1234567890',
-#   'group_id': '1234567890',
-#   'name': 'my_awesome_bot',
-#   'avatar_url': 'https://i.groupme.com/123456789',
-#   'callback_url': 'https://example.com/bots/callback',
-#   'dm_notification': False,
-#   'active': True
-# }
+@bot.command("/echo")
+def echo(message, args):
+    message.reply(f"You said: {args}")
+
+# views.py
+from django.http import JsonResponse
+from django.views import View
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+import json
+from .bot_instance import bot
+
+@method_decorator(csrf_exempt, name='dispatch')
+class GroupMeWebhook(View):
+    def post(self, request):
+        bot.process_message(json.loads(request.body))
+        return JsonResponse({"ok": True})
 ```
 
-#### Using an Existing Bot
+### Multiple Bots
 
-If you already have a bot ID, you can load it directly:
+```python
+from group_py import GroupMeBot, GroupMeSender
 
-``` py
-from group_py import GroupMeBot
+# Main bot handles webhooks
+system_bot = GroupMeBot(
+    group_id="your_group_id",
+    callback_url="https://yourserver.com/webhook",
+    enable_storage=True
+)
 
-# Load existing bot by ID
-bot = GroupMeBot(bot_id='1234567890')
+# Secondary bot only sends messages
+bean_bot = GroupMeSender(
+    bot_id="bean_bot_id",
+    api_key="your_api_key"
+)
 
-# Post a message
-bot.post_message('Hello from my bot!')
+@system_bot.command("/bean")
+def bean_command(message, args):
+    bean_bot.send_message(f"🫘 {args}")
 
-# Post a message with an image
-bot.post_message('Check this out!', picture_url='https://example.com/image.jpg')
+@system_bot.on_message
+def handle_images(message):
+    if message.has_image():
+        bean_bot.send_message("Nice pic!")
 ```
 
-#### Finding and Reusing Bots
+## Database Support
 
-The bot will automatically search for existing bots by name and group:
+The framework supports any SQLAlchemy-compatible database:
 
-``` py
-from group_py import GroupMeBot
+### SQLite (Default)
 
-# This will search for an existing bot with this name in the group
-# If found, it will use that bot. If not found, it will raise an error.
+```python
+bot = GroupMeBot(enable_storage=True)
+# Uses sqlite:///messages.db
+```
+
+### PostgreSQL
+
+```python
 bot = GroupMeBot(
-    name='my_awesome_bot',
-    group_id='1234567890',
-    search_for_existing=True  # Default is True
+    enable_storage=True,
+    storage_connection="postgresql://user:pass@localhost/dbname"
 )
-
-bot.post_message('Reusing existing bot!')
 ```
 
-#### Cleaning Up
+### MySQL
 
-``` py
-# Destroy the bot and remove it from the group
+```python
+bot = GroupMeBot(
+    enable_storage=True,
+    storage_connection="mysql://user:pass@localhost/dbname"
+)
+```
+
+### Custom Queries
+
+```python
+from group_py.storage import StoredMessage
+from sqlalchemy import func
+
+session = bot.get_db_session()
+try:
+    # Count messages by user
+    results = session.query(
+        StoredMessage.user_id,
+        func.count(StoredMessage.id)
+    ).group_by(StoredMessage.user_id).all()
+
+    # Search with full-text
+    messages = session.query(StoredMessage)\
+        .filter(StoredMessage.text.like('%pizza%'))\
+        .order_by(StoredMessage.created_at.desc())\
+        .limit(10)\
+        .all()
+finally:
+    session.close()
+```
+
+## Advanced Features
+
+### Rich Media
+
+Send images and locations:
+
+```python
+# Send image
+bot.send_message("Check this out!", image_url="https://example.com/image.jpg")
+
+# Send location
+bot.send_location("Office", lat=37.7749, lng=-122.4194, text="Meet here!")
+
+# Check for attachments in messages
+@bot.on_message
+def handle_media(message):
+    if message.has_image():
+        url = message.get_image_url()
+        message.reply(f"Nice image: {url}")
+
+    if message.has_location():
+        lat, lng, name = message.get_location()
+        message.reply(f"Location: {name} ({lat}, {lng})")
+```
+
+### Auto-Create and Cleanup
+
+Bots can be automatically created and destroyed:
+
+```python
+# Auto-creates bot on initialization
+bot = GroupMeBot(
+    group_id="your_group_id",
+    callback_url="https://yourserver.com/webhook",
+    bot_name="My Bot",
+    auto_create=True  # Default
+)
+
+# Bot is automatically destroyed when program exits
+# Or manually destroy:
 bot.destroy()
 ```
 
-#### Singleton Pattern
+### Environment Variables
 
-`GroupMeBot` uses a singleton pattern, so you only have one instance per bot:
+All configuration can be set via environment variables:
 
-``` py
-from group_py import GroupMeBot
-
-bot1 = GroupMeBot(bot_id='1234567890')
-bot2 = GroupMeBot(bot_id='1234567890')
-
-assert bot1 is bot2  # Same instance!
+```bash
+export GROUPME_API_KEY=your_api_key
+export GROUPME_BOT_ID=your_bot_id
+export GROUPME_GROUP_ID=your_group_id
+export GROUPME_CALLBACK_URL=https://yourserver.com/webhook
 ```
 
-
-## Complete Examples
-
-### Example 1: Simple Echo Bot
-
-A bot that echoes messages back to the group:
-
-``` py
-from group_py import CommandHandler, MessageRouter, HandlerContext, GroupMeBot, Message
-
-class EchoHandler(CommandHandler):
-    command_str = '!echo'
-
-    @staticmethod
-    def help():
-        return 'Echoes your message back. Usage: !echo <message>'
-
-    @classmethod
-    def can_handle(cls, message: Message):
-        return message.text.lower().strip().startswith(cls.command_str)
-
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        # Extract the message after the command
-        text = context.message.text[len('!echo'):].strip()
-        if text:
-            context.bot.post_message(f'Echo: {text}')
-        else:
-            context.bot.post_message('Usage: !echo <message>')
-
-# Setup
-bot = GroupMeBot(bot_id='your_bot_id')
-router = MessageRouter([EchoHandler], bot=bot)
+```python
+# No arguments needed!
+bot = GroupMeBot()
 ```
 
-### Example 2: Dice Roller
+## Troubleshooting
 
-A bot that rolls dice:
+### Bot not responding
 
-``` py
-import random
-from group_py import CommandHandler, MessageRouter, HandlerContext, GroupMeBot, Message
+- Check that your callback URL is publicly accessible
+- Verify the webhook is registered in GroupMe
+- Check that you're calling `bot.process_message(data)` in your webhook handler
 
-class DiceHandler(CommandHandler):
-    command_str = '!roll'
+### Messages not storing
 
-    @staticmethod
-    def help():
-        return 'Rolls a dice. Usage: !roll [sides] (default: 6)'
+- Ensure `enable_storage=True` when initializing the bot
+- Check database connection string is valid
+- Verify database permissions
 
-    @classmethod
-    def can_handle(cls, message: Message):
-        return message.text.lower().strip().startswith(cls.command_str)
+### Auto-create not working
 
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        text = context.message.text[len('!roll'):].strip()
+- Ensure `group_id` and `callback_url` are provided
+- Check API key has permissions to create bots
+- Verify callback URL is publicly accessible
 
-        try:
-            sides = int(text) if text else 6
-            if sides < 1:
-                context.bot.post_message('Dice must have at least 1 side!')
-                return
+## Contributing
 
-            roll = random.randint(1, sides)
-            context.bot.post_message(
-                f'{context.message.name} rolled a {sides}-sided dice: **{roll}**'
-            )
-        except ValueError:
-            context.bot.post_message('Invalid number of sides!')
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-# Setup
-bot = GroupMeBot(bot_id='your_bot_id')
-router = MessageRouter([DiceHandler], bot=bot)
-```
+## License
 
-### Example 3: Multi-Handler Bot with Help
-
-A bot with multiple commands and a help system:
-
-``` py
-from group_py import CommandHandler, MessageRouter, HandlerContext, GroupMeBot, Message
-
-class GreetHandler(CommandHandler):
-    command_str = '!greet'
-
-    @staticmethod
-    def help():
-        return 'Greets you by name'
-
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        context.bot.post_message(f'Hello, {context.message.name}! 👋')
-
-class TimeHandler(CommandHandler):
-    command_str = '!time'
-
-    @staticmethod
-    def help():
-        return 'Shows current time'
-
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        from datetime import datetime
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        context.bot.post_message(f'Current time: {current_time}')
-
-class StatusHandler(CommandHandler):
-    command_str = '!status'
-
-    @staticmethod
-    def help():
-        return 'Shows bot status'
-
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        context.bot.post_message('🤖 Bot is online and ready!')
-
-# Setup with multiple handlers
-bot = GroupMeBot(bot_id='your_bot_id')
-router = MessageRouter(
-    [GreetHandler, TimeHandler, StatusHandler],
-    bot=bot
-)
-
-# The router automatically includes a !help command that lists all handlers
-```
-
-### Example 4: Flask Server with Message Routing
-
-A complete Flask server that handles GroupMe callbacks:
-
-``` py
-from flask import Flask, request
-from group_py import (
-    CommandHandler, MessageRouter, HandlerContext,
-    GroupMeBot, Message
-)
-
-app = Flask(__name__)
-
-# Define handlers
-class PingHandler(CommandHandler):
-    command_str = '!ping'
-
-    @staticmethod
-    def help():
-        return 'Responds with pong'
-
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        context.bot.post_message('Pong! 🏓')
-
-class QuoteHandler(CommandHandler):
-    command_str = '!quote'
-
-    @staticmethod
-    def help():
-        return 'Posts an inspirational quote'
-
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        quotes = [
-            'The only way to do great work is to love what you do. - Steve Jobs',
-            'Innovation distinguishes between a leader and a follower. - Steve Jobs',
-            'Life is what happens when you\'re busy making other plans. - John Lennon',
-        ]
-        import random
-        context.bot.post_message(random.choice(quotes))
-
-# Initialize bot and router
-bot = GroupMeBot(bot_id='your_bot_id')
-router = MessageRouter([PingHandler, QuoteHandler], bot=bot)
-
-@app.route('/callback', methods=['POST'])
-def callback():
-    '''Handle incoming GroupMe messages'''
-    try:
-        raw_message_data = request.get_json()
-
-        # Ignore messages from the bot itself
-        if raw_message_data.get('sender_type') == 'bot':
-            return {'status': 'ok'}
-
-        message = Message(raw_message_data)
-        router.route(message)
-
-        return {'status': 'ok'}
-    except Exception as e:
-        print(f'Error handling callback: {e}')
-        return {'status': 'error'}, 500
-
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
-```
-
-### Example 5: Handler with Router Access
-
-A handler that accesses other handlers through the router:
-
-``` py
-from group_py import CommandHandler, MessageRouter, HandlerContext, GroupMeBot, Message
-
-class ListCommandsHandler(CommandHandler):
-    command_str = '!commands'
-
-    @staticmethod
-    def help():
-        return 'Lists all available commands'
-
-    @staticmethod
-    def execute(context: HandlerContext) -> None:
-        commands = []
-
-        # Iterate through all handlers in the router
-        for route in context.router.get_routes.values():
-            handler = route.handler
-
-            # Check if it's a CommandHandler
-            if hasattr(handler, 'command_str') and handler.command_str:
-                cmd = handler.command_str
-                help_text = handler.help()
-                commands.append(f'**{cmd}** - {help_text}')
-
-        if commands:
-            message = 'Available commands:\n' + '\n'.join(commands)
-        else:
-            message = 'No commands available'
-
-        context.bot.post_message(message)
-
-# Setup
-bot = GroupMeBot(bot_id='your_bot_id')
-router = MessageRouter([ListCommandsHandler], bot=bot)
-```
+MIT License - see LICENSE file for details.
