@@ -22,7 +22,6 @@ def bot(mock_client, mock_bot_id, mock_group_id):
         name="Test Bot",
         client=mock_client,
         group_id=mock_group_id,
-        storage=None,
     )
 
 
@@ -33,14 +32,12 @@ def test_bot_initialization(mock_client, mock_bot_id, mock_group_id):
         name="Test Bot",
         client=mock_client,
         group_id=mock_group_id,
-        storage=None,
     )
 
     assert bot.bot_id == mock_bot_id
     assert bot.name == "Test Bot"
     assert bot.client == mock_client
     assert bot.group_id == mock_group_id
-    assert bot.storage is None
 
 
 def test_bot_send_message(bot, mock_client):
@@ -49,8 +46,8 @@ def test_bot_send_message(bot, mock_client):
 
     bot.send_message("Hello, world!")
 
-    # Should swap bot_id temporarily
-    mock_client.send_message.assert_called_once_with("Hello, world!", image_url=None)
+    # Should swap bot_id temporarily and pass mentions parameter
+    mock_client.send_message.assert_called_once_with("Hello, world!", image_url=None, mentions=None)
 
 
 def test_bot_send_message_with_image(bot, mock_client):
@@ -60,7 +57,7 @@ def test_bot_send_message_with_image(bot, mock_client):
     bot.send_message("Check this!", image_url="https://example.com/image.jpg")
 
     mock_client.send_message.assert_called_once_with(
-        "Check this!", image_url="https://example.com/image.jpg"
+        "Check this!", image_url="https://example.com/image.jpg", mentions=None
     )
 
 
@@ -76,22 +73,21 @@ def test_bot_send_location(bot, mock_client):
     )
 
 
-def test_bot_send_message_with_storage(mock_client, mock_bot_id, mock_group_id):
-    """Test send_message with storage enabled."""
-    mock_storage = Mock()
+def test_bot_send_message_with_mentions(mock_client, mock_bot_id, mock_group_id):
+    """Test send_message with mentions."""
     bot = GroupMeBot(
         bot_id=mock_bot_id,
         name="Test Bot",
         client=mock_client,
         group_id=mock_group_id,
-        storage=mock_storage,
     )
 
     mock_client.send_message = Mock(return_value={"id": "msg_1"})
+    mentions = [{"user_id": "123", "name": "Bob"}]
 
-    bot.send_message("Hello with storage!")
+    bot.send_message("Hello @Bob!", mentions=mentions)
 
-    # Should save to storage
-    mock_storage.save_sent.assert_called_once_with(
-        "Hello with storage!", mock_group_id, mock_bot_id, None
+    # Should pass mentions to client
+    mock_client.send_message.assert_called_once_with(
+        "Hello @Bob!", image_url=None, mentions=mentions
     )

@@ -164,5 +164,70 @@ def test_bot_send_message(mock_manager):
     bot.send_message("Hello, world!")
 
     mock_manager.client.send_message.assert_called_once_with(
-        "Hello, world!", image_url=None
+        "Hello, world!", image_url=None, mentions=None
     )
+
+
+def test_bot_recovery_finds_existing(mock_api_key, mock_group_id):
+    """Test that bot recovery finds and reuses existing bots."""
+    with patch("group_py.bot.GroupMeClient") as mock_client_class:
+        mock_client = mock_client_class.return_value
+
+        # Simulate finding an existing bot
+        mock_client.find_bot.return_value = {
+            "bot_id": "recovered_bot_123",
+            "name": "TestBot",
+            "group_id": mock_group_id,
+        }
+
+        manager = GroupMeBotManager(
+            api_key=mock_api_key,
+            group_id=mock_group_id,
+            callback_url="https://test.com/webhook",
+            bot_name="TestBot",
+            # No bot_id provided - should trigger auto-create/recovery
+        )
+
+        # Should have called find_bot to check for existing
+        mock_client.find_bot.assert_called_once_with("TestBot", mock_group_id)
+
+        # Should NOT have called create_bot since we found an existing one
+        mock_client.create_bot.assert_not_called()
+
+        # Should be using the recovered bot ID
+        assert manager.primary_bot.bot_id == "recovered_bot_123"
+
+
+def test_bot_recovery_creates_when_not_found(mock_api_key, mock_group_id):
+    """Test that a new bot is created when no existing bot is found."""
+    with patch("group_py.bot.GroupMeClient") as mock_client_class:
+        mock_client = mock_client_class.return_value
+
+        # Simulate no existing bot found
+        mock_client.find_bot.return_value = None
+
+        # Simulate successful bot creation
+        mock_client.create_bot.return_value = {
+            "response": {
+                "bot": {
+                    "bot_id": "new_bot_456",
+                    "name": "NewBot",
+                }
+            }
+        }
+
+        manager = GroupMeBotManager(
+            api_key=mock_api_key,
+            group_id=mock_group_id,
+            callback_url="https://test.com/webhook",
+            bot_name="NewBot",
+        )
+
+        # Should have checked for existing bot first
+        mock_client.find_bot.assert_called_once_with("NewBot", mock_group_id)
+
+        # Should have created a new bot since none was found
+        mock_client.create_bot.assert_called_once()
+
+        # Should be using the newly created bot ID
+        assert manager.primary_bot.bot_id == "new_bot_456"

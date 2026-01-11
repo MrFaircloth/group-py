@@ -2,7 +2,6 @@
 
 from typing import Dict, Any, Optional
 from .client import GroupMeClient
-from .storage import MessageStorage
 
 
 class GroupMeBot:
@@ -28,7 +27,6 @@ class GroupMeBot:
         name: str,
         client: GroupMeClient,
         group_id: str,
-        storage: Optional[MessageStorage] = None,
     ):
         """
         Initialize a bot instance.
@@ -40,43 +38,41 @@ class GroupMeBot:
             name: Bot name
             client: Shared GroupMeClient instance
             group_id: Group ID this bot belongs to
-            storage: Optional shared storage instance
         """
         self.bot_id = bot_id
         self.name = name
         self.client = client
         self.group_id = group_id
-        self.storage = storage
 
         # Update client's bot_id for this bot's operations
         self._original_bot_id = client.bot_id
 
-    def send_message(self, text: str, image_url: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+    def send_message(self, text: str, image_url: Optional[str] = None, mentions=None, **kwargs) -> Dict[str, Any]:
         """
         Send a message as this bot.
 
         Args:
             text: Message text
             image_url: Optional image URL
+            mentions: Optional list of mentions [{"user_id": "123", "name": "Bob"}]
             **kwargs: Additional arguments passed to client
 
         Returns:
             Response from GroupMe API
+
+        Example:
+            # Send with mentions
+            bot.send_message(
+                "Hey @Bob, check this out!",
+                mentions=[{"user_id": "123456", "name": "Bob"}]
+            )
         """
         # Temporarily set client's bot_id to this bot's ID
         original_id = self.client.bot_id
         self.client.bot_id = self.bot_id
 
         try:
-            response = self.client.send_message(text, image_url=image_url, **kwargs)
-
-            # Store sent message if storage is enabled
-            if self.storage:
-                try:
-                    self.storage.save_sent(text, self.group_id, self.bot_id, image_url)
-                except Exception as e:
-                    print(f"⚠ Failed to store sent message from {self.name}: {e}")
-
+            response = self.client.send_message(text, image_url=image_url, mentions=mentions, **kwargs)
             return response
         except Exception as e:
             print(f"⚠ Failed to send message from {self.name}: {e}")

@@ -173,3 +173,9 @@ messages.db
 # OS files
 .DS_Store
 Thumbs.db
+
+# GroupMe config files (may contain sensitive keys)
+groupme_config.yaml
+**/groupme_config.yaml
+config.yaml
+bots.yaml

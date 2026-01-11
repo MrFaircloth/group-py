@@ -1,0 +1,87 @@
+# GroupMe Bot Configuration
+# This is an example configuration file for group-py v3.0.0
+#
+# To use this file:
+# 1. Copy this file to groupme_config.yaml (or any name you prefer)
+# 2. Fill in your actual values below
+# 3. Run: GroupMeBotManager() - it will auto-load this config!
+#
+# OR set a custom path:
+#   - Via code: GroupMeBotManager(config_file="path/to/config.yaml")
+#   - Via env var: export GROUPME_CONFIG_FILE="path/to/config.yaml"
+
+# ============================================================
+# REQUIRED FIELDS
+# ============================================================
+
+# Your GroupMe API key (get from https://dev.groupme.com)
+api_key: "your_groupme_api_key_here"
+
+# The Group ID where your bot will operate
+# You can find this by visiting https://dev.groupme.com/groups
+group_id: "your_group_id_here"
+
+# ============================================================
+# OPTIONAL FIELDS
+# ============================================================
+
+# Webhook callback URL (only needed if receiving messages via webhooks)
+# If using real-time WebSocket (Phase 2), this is optional
+callback_url: "https://your-server.com/webhook"
+
+# Name for your primary bot (default: "System")
+bot_name: "MyBot"
+
+# Existing bot ID (if you already created a bot on GroupMe)
+# If not provided, a new bot will be auto-created
+bot_id: "existing_bot_id_here"
+
+# Avatar URL for your bot
+avatar_url: "https://i.groupme.com/123456789"
+
+# Your GroupMe user ID (required only for real-time WebSocket mode)
+# Find your user ID at https://dev.groupme.com/session/user_id
+user_id: "your_user_id_here"
+
+# ============================================================
+# REAL-TIME WEBSOCKET CONFIGURATION
+# ============================================================
+# Real-time mode allows your bot to receive messages via WebSocket
+# instead of webhooks. No HTTP endpoint required!
+
+realtime:
+  enabled: false          # Set to true to enable real-time WebSocket
+  # reconnect: true       # Auto-reconnect on disconnect (default: true)
+  # reconnect_delay: 5    # Seconds to wait before reconnecting (default: 5)
+
+# ============================================================
+# EXAMPLES
+# ============================================================
+
+# Example 1: Minimal configuration (webhook mode)
+# api_key: "abc123..."
+# group_id: "456789..."
+# callback_url: "https://myapp.com/webhook"
+
+# Example 2: Real-time WebSocket mode (no webhook needed!)
+# api_key: "abc123..."
+# group_id: "456789..."
+# user_id: "your_user_id"
+# realtime:
+#   enabled: true
+
+# Example 3: With existing bot
+# api_key: "abc123..."
+# group_id: "456789..."
+# bot_id: "existing_bot_id"
+# bot_name: "Assistant"
+
+# Example 4: Full configuration with real-time
+# api_key: "abc123..."
+# group_id: "456789..."
+# user_id: "your_user_id"
+# bot_name: "Helper Bot"
+# bot_id: "bot_123"
+# avatar_url: "https://i.groupme.com/avatar.jpg"
+# realtime:
+#   enabled: true

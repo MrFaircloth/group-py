@@ -45,57 +45,6 @@ class Message:
             attachments=data.get("attachments", []),
         )
 
-    @classmethod
-    def from_cursor(cls, cursor) -> List["Message"]:
-        """
-        Convert database cursor/query results to Message objects.
-        Works with both SQLAlchemy results and raw SQL cursors.
-
-        Args:
-            cursor: SQLAlchemy query result or raw cursor with raw_json column
-
-        Returns:
-            List of Message objects
-
-        Example with raw SQL:
-            from sqlalchemy import text
-            session = bot.get_db_session()
-            result = session.execute(text("SELECT raw_json FROM groupme_messages WHERE ..."))
-            messages = Message.from_cursor(result)
-            session.close()
-        """
-        results = []
-        for row in cursor:
-            # Handle SQLAlchemy model objects
-            if hasattr(row, "raw_json"):
-                data = json.loads(row.raw_json)
-            # Handle raw SQL results (tuple/list)
-            else:
-                data = json.loads(row[0])
-            results.append(cls.from_dict(data))
-        return results
-
-    @classmethod
-    def from_query_results(cls, results) -> List["Message"]:
-        """
-        Convert SQLAlchemy query results (list of StoredMessage objects) to Message objects.
-
-        Args:
-            results: List of StoredMessage objects from SQLAlchemy query
-
-        Returns:
-            List of Message objects
-
-        Example:
-            from group_py.storage import StoredMessage
-            session = bot.get_db_session()
-            results = session.query(StoredMessage)\\
-                .filter(StoredMessage.text.like('%pizza%'))\\
-                .all()
-            messages = Message.from_query_results(results)
-            session.close()
-        """
-        return [cls.from_dict(json.loads(r.raw_json)) for r in results]
 
     def has_image(self) -> bool:
         """Check if message contains an image attachment."""

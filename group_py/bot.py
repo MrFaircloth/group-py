@@ -6,7 +6,6 @@ import threading
 from typing import Callable, List, Optional, Dict, Any
 from .client import GroupMeClient
 from .models import Message
-from .storage import MessageStorage
 from .exceptions import ConfigurationError
 from .sender import GroupMeBot
 
@@ -16,14 +15,13 @@ class GroupMeBotManager:
     Manager class for handling GroupMe webhooks, command routing, and bot creation.
 
     The manager creates and manages multiple GroupMeBot instances, handles webhook
-    processing, command routing, and provides shared storage across all bots.
+    processing, and command routing.
 
     Example:
         manager = GroupMeBotManager(
             api_key="...",
             group_id="...",
-            callback_url="https://...",
-            enable_storage=True
+            callback_url="https://..."
         )
 
         # Get the primary webhook bot
@@ -46,8 +44,9 @@ class GroupMeBotManager:
         bot_name: str = "System",
         bot_id: str = None,
         avatar_url: str = None,
-        enable_storage: bool = False,
-        storage_connection: str = None,
+        config_file: str = None,
+        enable_realtime: bool = False,
+        user_id: str = None,
     ):
         """
         Initialize the bot manager and create the primary webhook bot.
@@ -55,16 +54,70 @@ class GroupMeBotManager:
         Args:
             api_key: GroupMe API key (or set GROUPME_API_KEY env var)
             group_id: Group ID (or set GROUPME_GROUP_ID env var)
-            callback_url: Webhook callback URL (optional, only needed for receiving messages/commands)
+            callback_url: Webhook callback URL (optional, only needed for webhook mode)
             bot_name: Name for the primary bot (default: "System")
             bot_id: Existing bot ID for primary bot (optional, will auto-create if not provided)
             avatar_url: Avatar URL for the primary bot
-            enable_storage: If True, enable SQLite message storage for all bots
-            storage_connection: Custom DB path (e.g., "sqlite:///myapp.db")
+            config_file: Path to YAML config file (optional, defaults to groupme_config.yaml if exists)
+            enable_realtime: Enable real-time WebSocket connection (default: False)
+            user_id: GroupMe user ID (required if enable_realtime=True)
 
         Raises:
             ConfigurationError: If required credentials are missing
+
+        Example:
+            # Auto-load from groupme_config.yaml if it exists
+            manager = GroupMeBotManager()
+
+            # Load from specific config file
+            manager = GroupMeBotManager(config_file="my_config.yaml")
+
+            # Or use traditional parameters
+            manager = GroupMeBotManager(api_key="...", group_id="...")
+
+            # Enable real-time WebSocket mode
+            manager = GroupMeBotManager(
+                api_key="...",
+                group_id="...",
+                user_id="...",
+                enable_realtime=True
+            )
         """
+        # Check if we should load from YAML config
+        should_load_yaml = False
+        yaml_path = None
+
+        # If config_file explicitly provided, use it
+        if config_file:
+            yaml_path = config_file
+            should_load_yaml = True
+        # If no arguments provided, check for default config file
+        elif not any([api_key, group_id, callback_url, bot_id, avatar_url, bot_name != "System", user_id, enable_realtime]):
+            # Check environment variable first
+            default_path = os.getenv("GROUPME_CONFIG_FILE", "groupme_config.yaml")
+            if os.path.exists(default_path):
+                yaml_path = default_path
+                should_load_yaml = True
+
+        # Load from YAML if we should
+        if should_load_yaml:
+            from .config import load_yaml_config, get_config_value
+            config = load_yaml_config(yaml_path)
+
+            # Get realtime config
+            realtime_config = config.get("realtime", {})
+
+            # Extract values from config (params override config)
+            api_key = api_key or get_config_value(config, "api_key")
+            group_id = group_id or get_config_value(config, "group_id")
+            callback_url = callback_url or get_config_value(config, "callback_url")
+            bot_name = bot_name if bot_name != "System" else get_config_value(config, "bot_name", "System")
+            bot_id = bot_id or get_config_value(config, "bot_id")
+            avatar_url = avatar_url or get_config_value(config, "avatar_url")
+            user_id = user_id or get_config_value(config, "user_id")
+            if not enable_realtime:
+                enable_realtime = realtime_config.get("enabled", False)
+
         # Load configuration
         self.api_key = api_key or os.getenv("GROUPME_API_KEY")
         self.group_id = group_id or os.getenv("GROUPME_GROUP_ID")
@@ -91,17 +144,12 @@ class GroupMeBotManager:
         # Initialize shared client (bot_id will be swapped by individual bots)
         self.client = GroupMeClient(self.api_key)
 
-        # Handler storage
+        # Handler registration
         self._handlers: List[Callable] = []
         self._commands: Dict[str, Callable] = {}
         self._async_commands: Dict[str, tuple] = {}  # command -> (handler, ack_message)
         self._unknown_command_handler: Optional[Callable] = None
-
-        # Storage setup
-        self.storage: Optional[MessageStorage] = None
-        if enable_storage:
-            connection_string = storage_connection or "sqlite:///messages.db"
-            self.storage = MessageStorage(connection_string)
+        self._preprocessors: List[Callable] = []  # Global handlers that run for ALL messages
 
         # Bot registry
         self._bots: Dict[str, GroupMeBot] = {}
@@ -120,14 +168,85 @@ class GroupMeBotManager:
             name=bot_name,
             client=self.client,
             group_id=self.group_id,
-            storage=self.storage,
         )
         self._bots[primary_bot_id] = self._primary_bot
 
         print(f"✓ Primary bot '{bot_name}' ready with ID: {primary_bot_id}")
 
+        # Realtime setup
+        self.realtime_manager: Optional[Any] = None
+        self.user_id = user_id or os.getenv("GROUPME_USER_ID")
+
+        if enable_realtime:
+            if not self.user_id:
+                raise ConfigurationError(
+                    "user_id required for realtime mode. Set GROUPME_USER_ID "
+                    "environment variable or pass user_id to __init__"
+                )
+
+            from .realtime import RealtimeManager
+
+            self.realtime_manager = RealtimeManager(
+                user_id=self.user_id,
+                group_id=self.group_id,
+                message_callback=self._handle_realtime_message
+            )
+            self.realtime_manager.start()
+            print(f"✓ Real-time WebSocket client started for user {self.user_id}")
+
         # Register cleanup on exit
         atexit.register(self._cleanup)
+
+    @classmethod
+    def from_yaml(cls, config_path: str) -> 'GroupMeBotManager':
+        """
+        Create bot manager from YAML configuration file.
+
+        Args:
+            config_path: Path to YAML config file
+
+        Returns:
+            Initialized GroupMeBotManager
+
+        Raises:
+            ConfigError: If config file is invalid or missing required fields
+
+        Example:
+            manager = GroupMeBotManager.from_yaml("bots.yaml")
+
+        Config format:
+            api_key: "your_api_key"
+            group_id: "your_group_id"
+            callback_url: "https://example.com/webhook"  # optional (not needed for realtime)
+            bot_name: "System"  # optional, defaults to "System"
+            bot_id: "existing_bot_id"  # optional
+            avatar_url: "https://..."  # optional
+            user_id: "your_user_id"  # optional (required for realtime mode)
+
+            # Optional: Real-time WebSocket configuration
+            realtime:
+              enabled: true  # Enable WebSocket mode (default: false)
+              # Additional realtime options can be added here in future
+        """
+        from .config import load_yaml_config, get_config_value
+
+        config = load_yaml_config(config_path)
+
+        # Get realtime config
+        realtime_config = config.get("realtime", {})
+        enable_realtime = realtime_config.get("enabled", False)
+
+        # Extract manager config
+        return cls(
+            api_key=get_config_value(config, "api_key"),
+            group_id=get_config_value(config, "group_id"),
+            callback_url=get_config_value(config, "callback_url"),
+            bot_name=get_config_value(config, "bot_name", "System"),
+            bot_id=get_config_value(config, "bot_id"),
+            avatar_url=get_config_value(config, "avatar_url"),
+            user_id=get_config_value(config, "user_id"),
+            enable_realtime=enable_realtime,
+        )
 
     @property
     def primary_bot(self) -> GroupMeBot:
@@ -138,16 +257,28 @@ class GroupMeBotManager:
         """
         Create a new bot on GroupMe and return its ID.
 
+        Before creating, checks if a bot with the same name already exists
+        in the group. If found, reuses the existing bot to prevent orphans
+        from accumulating after crashes or restarts.
+
         Args:
             name: Bot name
             avatar_url: Optional avatar URL
 
         Returns:
-            Bot ID of the created bot
+            Bot ID of the created or recovered bot
 
         Raises:
             ConfigurationError: If bot creation fails
         """
+        # Check for existing bot with same name in group (crash recovery)
+        existing_bot = self.client.find_bot(name, self.group_id)
+        if existing_bot:
+            bot_id = existing_bot["bot_id"]
+            print(f"✓ Recovered existing bot '{name}' with ID: {bot_id}")
+            return bot_id
+
+        # No existing bot found, create new one
         try:
             response = self.client.create_bot(
                 name=name,
@@ -161,8 +292,121 @@ class GroupMeBotManager:
         except Exception as e:
             raise ConfigurationError(f"Failed to create bot: {e}")
 
+    def fetch_history(
+        self,
+        limit: int = 100,
+        before_id: Optional[str] = None,
+    ) -> List[Message]:
+        """
+        Fetch message history from GroupMe API.
+
+        Args:
+            limit: Number of messages to fetch (max 100)
+            before_id: Get messages before this ID (for pagination)
+
+        Returns:
+            List of Message objects (newest first)
+
+        Example:
+            # Get recent messages
+            messages = manager.fetch_history(limit=50)
+
+            # Paginate through older messages
+            oldest_id = messages[-1].id
+            older = manager.fetch_history(limit=50, before_id=oldest_id)
+        """
+        raw_messages = self.client.get_messages(
+            self.group_id,
+            limit=limit,
+            before_id=before_id
+        )
+
+        return [Message.from_dict(msg) for msg in raw_messages]
+
+    def backfill_history(
+        self,
+        days: int = 7,
+        callback: Optional[Callable[[Message], None]] = None,
+        max_messages: int = 1000
+    ) -> int:
+        """
+        Backfill message history for the last N days.
+
+        Useful for catching up on missed messages after bot restarts.
+
+        Args:
+            days: Number of days of history to fetch
+            callback: Optional function to call for each message (e.g., for storage)
+            max_messages: Maximum total messages to fetch
+
+        Returns:
+            Number of messages fetched
+
+        Example:
+            # Backfill last 3 days on startup
+            def store(message):
+                MyDatabase.save(message)
+
+            count = manager.backfill_history(days=3, callback=store)
+            print(f"Backfilled {count} messages")
+        """
+        import time
+
+        print(f"📥 Backfilling message history (last {days} days)...")
+
+        cutoff_time = int(time.time()) - (days * 24 * 60 * 60)
+        total_fetched = 0
+        before_id = None
+
+        while total_fetched < max_messages:
+            batch_size = min(100, max_messages - total_fetched)
+            messages = self.fetch_history(limit=batch_size, before_id=before_id)
+
+            if not messages:
+                break
+
+            # Filter messages within time window
+            recent_messages = [
+                msg for msg in messages
+                if msg.created_at >= cutoff_time
+            ]
+
+            # Call callback for each message
+            if callback:
+                for msg in recent_messages:
+                    try:
+                        callback(msg)
+                    except Exception as e:
+                        print(f"⚠ Error in backfill callback: {e}")
+
+            total_fetched += len(recent_messages)
+
+            # Stop if we've gone past the cutoff
+            if messages and messages[-1].created_at < cutoff_time:
+                break
+
+            # Stop if we got fewer messages than requested (no more to fetch)
+            if len(messages) < batch_size:
+                break
+
+            before_id = messages[-1].id
+            if total_fetched > 0 and total_fetched % 100 == 0:
+                print(f"  Fetched {total_fetched} messages...")
+
+        print(f"✓ Backfill complete: {total_fetched} messages")
+        return total_fetched
+
     def _cleanup(self):
-        """Clean up auto-created bots on exit."""
+        """Clean up auto-created bots and realtime connection on exit."""
+        # Stop realtime client first
+        if self.realtime_manager:
+            try:
+                self.realtime_manager.stop()
+                print("✓ Stopped real-time WebSocket client")
+            except Exception as e:
+                print(f"⚠ Warning: Failed to stop realtime client: {e}")
+
+        # Destroy auto-created bots
         for bot_id in self._auto_created_bot_ids:
             try:
                 self.client.destroy_bot(bot_id)
@@ -195,8 +439,6 @@ class GroupMeBotManager:
     ) -> GroupMeBot:
         """
         Create a new bot instance managed by this manager.
-
-        All bots created by this manager share the same storage (if enabled).
 
         Args:
             name: Bot name
@@ -238,7 +480,6 @@ class GroupMeBotManager:
             name=name,
             client=self.client,
             group_id=self.group_id,
-            storage=self.storage,
         )
 
         self._bots[bot_id] = bot
@@ -317,6 +558,49 @@ class GroupMeBotManager:
         self._unknown_command_handler = func
         return func
 
+    def on_any_message(self, func: Callable) -> Callable:
+        """
+        Decorator to register a global message handler.
+
+        This handler runs for ALL messages BEFORE command routing.
+        Perfect for: logging, storage, sanitization, analytics.
+
+        Args:
+            func: Handler function that takes (message)
+
+        Returns:
+            The original function (for decorator chaining)
+
+        Example:
+            @manager.on_any_message
+            def store_all(message):
+                # Runs for EVERY message (including commands)
+                MyDatabase.save(message)
+                print(f"[{message.name}]: {message.text}")
+
+            @manager.on_any_message
+            def sanitize(message):
+                # Multiple handlers can be registered
+                if message.text and has_profanity(message.text):
+                    message.text = censor(message.text)
+        """
+        self._preprocessors.append(func)
+        return func
+
+    def _handle_realtime_message(self, data: dict):
+        """
+        Process message received via WebSocket.
+
+        Routes to same message handling pipeline as webhooks.
+        This means all commands, handlers, etc. work identically
+        whether the message came from webhook or WebSocket.
+
+        Args:
+            data: Message data dict from Faye client
+        """
+        # Just route through existing process_webhook logic!
+        self.process_webhook(data)
+
     def process_webhook(self, data: dict) -> None:
         """
         Process a GroupMe webhook payload.
@@ -331,13 +615,6 @@ class GroupMeBotManager:
                 manager.process_webhook(request.get_json())
                 return "ok", 200
         """
-        # Store message first (if storage enabled)
-        if self.storage:
-            try:
-                self.storage.save_received(data)
-            except Exception as e:
-                print(f"⚠ Failed to store message: {e}")
-
         # Parse the message
         message = Message.from_dict(data)
 
@@ -347,6 +624,13 @@ class GroupMeBotManager:
         # Skip bot's own messages
         if message.sender_type == "bot":
             return
+
+        # Run preprocessors FIRST (before any routing)
+        for preprocessor in self._preprocessors:
+            try:
+                preprocessor(message)
+            except Exception as e:
+                print(f"⚠ Error in preprocessor {preprocessor.__name__}: {e}")
 
         # Skip messages with no text
         if not message.text:
@@ -416,62 +700,3 @@ class GroupMeBotManager:
         """List all groups the user belongs to (helpful for finding group_id)."""
         return self.client.list_groups()
 
-    # Storage convenience methods
-
-    def get_db_session(self):
-        """
-        Get SQLAlchemy session for custom queries.
-        Remember to close the session when done!
-
-        Returns:
-            SQLAlchemy Session object
-
-        Example:
-            from group_py.storage import StoredMessage
-
-            session = bot.get_db_session()
-            try:
-                messages = session.query(StoredMessage)\\
-                    .filter(StoredMessage.text.like('%pizza%'))\\
-                    .order_by(StoredMessage.created_at.desc())\\
-                    .all()
-
-                # Convert to Message objects
-                from group_py import Message
-                import json
-                msg_objects = [Message.from_dict(json.loads(m.raw_json)) for m in messages]
-            finally:
-                session.close()
-        """
-        if not self.storage:
-            raise Exception("Storage not enabled. Set enable_storage=True")
-        return self.storage.get_session()
-
-    def get_recent_messages(self, limit: int = 50, as_objects: bool = False):
-        """
-        Get recent messages from storage.
-
-        Args:
-            limit: Number of messages to retrieve
-            as_objects: If True, return Message objects. If False, return dicts.
-
-        Returns:
-            List of Message objects or dicts (newest first)
-
-        Example:
-            # Get as dicts
-            recent = bot.get_recent_messages(limit=20)
-
-            # Get as Message objects
-            messages = bot.get_recent_messages(limit=20, as_objects=True)
-            for msg in messages:
-                print(f"{msg.name}: {msg.text}")
-        """
-        if not self.storage:
-            raise Exception("Storage not enabled. Set enable_storage=True")
-
-        results = self.storage.get_recent(self.group_id, limit=limit)
-
-        if as_objects:
-            return [Message.from_dict(data) for data in results]
-        return results
