@@ -1,0 +1,24 @@
+# group-py Configuration File
+# Copy this file to bots.yaml and fill in your credentials
+
+# Required settings
+api_key: "your_groupme_api_key_here"
+group_id: "your_group_id_here"
+
+# Optional: Bot configuration
+bot_name: "MyBot"           # Name for the primary bot (default: "System")
+# bot_id: "existing_bot_id" # Use existing bot instead of auto-creating
+# avatar_url: "https://..."  # Bot avatar image URL
+
+# Optional: Webhook mode (for Flask/Django)
+# callback_url: "https://your-server.com/webhook"
+
+# Optional: Real-time WebSocket mode (no webhook needed!)
+user_id: "your_user_id_here"  # Required for realtime mode
+realtime:
+  enabled: true               # Enable WebSocket connection
+
+# Tips:
+# - Get your API key from https://dev.groupme.com/
+# - Find your group_id by going to the group in GroupMe web and copying from URL
+# - Find your user_id from your GroupMe profile

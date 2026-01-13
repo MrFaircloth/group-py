@@ -618,8 +618,8 @@ class GroupMeBotManager:
         # Parse the message
         message = Message.from_dict(data)
 
-        # Inject reply functionality using primary bot
-        message.reply = lambda text, **kwargs: self.primary_bot.send_message(text, **kwargs)
+        # Inject send callback for post() method (and deprecated reply())
+        message._send_callback = lambda text, **kwargs: self.primary_bot.send_message(text, **kwargs)
 
         # Skip bot's own messages
         if message.sender_type == "bot":

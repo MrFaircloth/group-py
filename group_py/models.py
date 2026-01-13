@@ -1,8 +1,8 @@
 """Data models for GroupMe messages."""
 
-from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
-import json
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Any, Callable
+import warnings
 
 
 @dataclass
@@ -19,6 +19,9 @@ class Message:
     sender_type: str
     avatar_url: Optional[str] = None
     attachments: Optional[List[Dict[str, Any]]] = None
+
+    # Callback injected by bot manager for post() method
+    _send_callback: Optional[Callable] = field(default=None, repr=False)
 
     @classmethod
     def from_dict(cls, data: dict) -> "Message":
@@ -76,13 +79,72 @@ class Message:
                 return (a.get("lat"), a.get("lng"), a.get("name"))
         return None
 
-    def reply(self, text: str, **kwargs):
+    def post(self, text: str, **kwargs):
         """
-        Reply to this message. This method is injected by the Bot class.
-        Will be available after message is processed by bot.
+        Post a message to the group (v3.0+).
+
+        This is the preferred method name in v3.0. It's clearer than "reply"
+        since you're not always replying - you're posting to the group.
 
         Args:
-            text: Message text to reply with
+            text: Message text to post
             **kwargs: Additional arguments passed to send_message()
+                - image_url: Optional image URL
+                - mentions: Optional list of mention dicts
+                - attachments: Optional custom attachments
+
+        Returns:
+            API response dict
+
+        Raises:
+            NotImplementedError: If callback not initialized
+
+        Example:
+            @manager.command("hello")
+            def hello(message, args):
+                message.post("Hello!")
+
+            @manager.command("tag")
+            def tag(message, args):
+                message.post(
+                    f"Hey @{args}!",
+                    mentions=[{"user_id": "123", "name": args}]
+                )
         """
-        raise NotImplementedError("Reply method not initialized")
+        if self._send_callback is None:
+            raise NotImplementedError(
+                "Post method not initialized. This message was not created "
+                "by GroupMeBotManager.process_webhook()"
+            )
+        return self._send_callback(text, **kwargs)
+
+    def reply(self, text: str, **kwargs):
+        """
+        Reply to this message (DEPRECATED - use post() instead).
+
+        .. deprecated:: 3.0.0
+            Use :meth:`post` instead. This method will be removed in v4.0.
+
+        The name "reply" is misleading since you're not always replying to
+        something - you're just posting a message to the group.
+
+        Args:
+            text: Message text
+            **kwargs: Additional arguments passed to post()
+
+        Returns:
+            API response dict
+
+        Example (deprecated):
+            message.reply("Hello!")  # Shows DeprecationWarning
+
+        Example (recommended):
+            message.post("Hello!")
+        """
+        warnings.warn(
+            "Message.reply() is deprecated and will be removed in v4.0. "
+            "Use message.post() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return self.post(text, **kwargs)
